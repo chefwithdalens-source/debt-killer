@@ -19,8 +19,10 @@ If an account name matches a known lender, its logo shows in place of the initia
 
 Logo credits: Navy Federal, Capital One, Affirm, Mission Lane and Synchrony icons come from each company's official website favicon/touch icon. American Express, Target, Chase, Discover, Klarna, Afterpay, Wells Fargo, Bank of America and Apple come from [Simple Icons](https://simpleicons.org) (CC0). Citi and Best Buy come from Wikimedia Commons. All names and logos are trademarks of their respective owners. They're used only to identify accounts, and their use doesn't imply any affiliation or endorsement.
 
-## App logo
-The Anubis logo artwork was provided by the app's owner. App icons and favicons are cropped from it and live in `/logos/app/`.
+## Artwork credits
+- Logo: skull/credit-card mark chosen by the owner (AI-generated concept). All icon sizes are built from `logos/app/master.png`.
+- Anubis illustration: AI-generated for the owner (`logos/anubis/`).
+- The "Killer" wordmark uses Pirata One by Rodrigo Fuenzalida & Nicolas Massi, under the SIL Open Font License (`fonts/OFL-PirataOne.txt`). It's self-hosted and subset to just those letters.
 
 ## Accounts, calendar and colors
 - **Accounts** are grouped into collapsible category folders, laid out like the iPhone App Library. Each tile shows a #1, #2… badge for its place in the snowball order. Which folders are open or closed is a display preference saved in `debt-killer:ui`; it isn't account data.
@@ -32,3 +34,6 @@ The Anubis logo artwork was provided by the app's owner. App icons and favicons 
 
 ## Layout
 There's a floating glass tab bar at the bottom on every screen size (Home, Accounts, Calendar, Progress), and Add account sits in the header. Spacing follows a scale from `--sp-1` to `--sp-8` (4, 8, 12, 16, 24, 32, 48 and 64px).
+
+## Home
+The Home screen opens on a glass globe. Its liquid fill shows the percent paid, and its color shifts from red to orange, yellow and green as you pay. **Explore more** opens the full Home view below it. Every account also has a **What if I pay extra?** preview. Logging a payment plays a quick Anubis strike clip, which you can turn off in Settings.

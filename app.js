@@ -107,12 +107,13 @@ function basePayments(accts, defMonths){
   });
   return { open, base };
 }
-function simulate(accts, { extra = 0, budget = S.settings.budget, defMonths = S.settings.defaultMonths } = {}){
+function simulate(accts, { extra = 0, extraFor = null, budget = S.settings.budget, defMonths = S.settings.defaultMonths } = {}){
   const list = accts.map(a => ({ ...a, bal:a.balance }));
   const { open, base } = basePayments(list, defMonths);
   let pool = Object.values(base).reduce((s,v)=>s+v,0);
   if (budget && budget > pool) pool = budget;
   pool += Math.max(0, +extra||0);
+  if (extraFor && extraFor.amount > 0 && base[extraFor.id] !== undefined){ base[extraFor.id] += extraFor.amount; pool += extraFor.amount; }
   const start = new Date(); const startM = new Date(start.getFullYear(), start.getMonth(), 1);
   const res = { months:[], payoff:{}, interest:{}, firstPay:{}, totalInterest:0, freeDate:null, stuck:false };
   list.forEach(a => { res.interest[a.id] = 0; });
@@ -192,13 +193,17 @@ const icon = {
 };
 
 function viewEmpty(){
-  return `<section class="empty card glass">
-    <img class="ill-logo" src="logos/app/logo-80.png" srcset="logos/app/logo-80.png 1x, logos/app/logo-192.png 2x" width="80" height="80" alt="Debt Killer logo">
-    <h1>Start the battle</h1>
-    <p>Add each debt you owe. Debt Killer lines them up smallest first and tells you what to pay next.</p>
-    <button class="btn primary" data-act="add">Add your first account</button>
-    <p class="small" style="margin:18px 0 0">${STORAGE_MSG}</p>
-  </section>`;
+  return `<section class="welcome">
+    <picture class="anubis-hero" aria-hidden="true">
+      <source type="image/webp" srcset="logos/anubis/anubis-800.webp 800w, logos/anubis/anubis-1400.webp 1400w, logos/anubis/anubis-2048.webp 2048w" sizes="(min-width:900px) 620px, (min-width:700px) 540px, 92vw">
+      <img src="logos/anubis/anubis-800.jpg" alt="" width="800" height="677" decoding="async">
+    </picture>
+    <div class="empty card glass">
+      <h1>Start the battle</h1>
+      <p>Add each debt you owe. Debt Killer lines them up smallest first and tells you what to pay next.</p>
+      <button class="btn primary" data-act="add">Add your first account</button>
+      <p class="small" style="margin:18px 0 0">${STORAGE_MSG}</p>
+    </div></section>`;
 }
 
 function gauge(pct, size=120, dark=true){
@@ -211,16 +216,14 @@ function gauge(pct, size=120, dark=true){
     <text x="${size/2}" y="${size/2+16}" text-anchor="middle" font-size="11" font-weight="700" letter-spacing="1.2" fill="${dark?'#c9c4b8':'currentColor'}">PAID</text></svg>`;
 }
 
-function viewHome(){
+function homeFeedHTML(){
   const t = totals(); const sim = simulate(S.accounts); const open = openAccounts();
   const next = open[0];
   const toPay = Object.values(sim.firstPay).reduce((s,v)=>s+v,0);
   const paidM = paidThisMonth();
   const pct = t.total ? t.paid/t.total : 0;
   return `
-  <h1 class="large-title">Home</h1>
-  <p class="subtitle">${open.length ? `${plural(open.length,'account')} to go` : 'Every account is paid off. Nice work.'}</p>
-  <div class="grid two">
+  <div class="grid two feed-grid">
     <section class="card hero span-all" aria-label="Total debt">
       <div class="row between" style="flex-wrap:wrap;gap:10px"><span class="micro">Total debt</span>
         ${sim.freeDate ? `<button class="badge" data-act="toProgress">${debtFree(sim.freeDate)} ›</button>` : ''}</div>
@@ -233,14 +236,13 @@ function viewHome(){
         <div>${gauge(pct, 140)}</div>
       </div>
     </section>
-    ${S.banner ? `<div class="banner span-all ${S.banner.good?'good':''}" role="status"><span><b>${esc(S.banner.text.split(' after ')[0])}</b> after ${esc(S.banner.text.split(' after ').slice(1).join(' after '))}</span><button aria-label="Dismiss" data-act="dismissBanner">✕</button></div>` : ''}
-    ${!S.flags.backupTip ? `<div class="banner span-all" role="note"><span>${icon.info}</span><span>Tip: ${STORAGE_MSG}</span><button class="btn sm" data-act="export" style="margin-left:auto;width:auto">Export</button><button aria-label="Dismiss tip" data-act="dismissTip" style="margin-left:0">✕</button></div>`:''}
     ${next ? `<section class="card glass">
       <div class="micro">Next · ${esc(next.name)}</div>
       <div class="mid">${money2(next.balance)} left to pay</div>
       <div class="bar"><i style="width:${next.start? (1-next.balance/next.start)*100:0}%"></i></div>
       <div class="row between" style="margin-top:12px"><span class="muted">${next.dueDay?dueChip(next):'No due date'}</span>
       <button class="btn primary sm" data-act="log" data-id="${next.id}">Pay ${money2(sim.firstPay[next.id]||next.min)} now</button></div>
+      <button class="link-btn" data-act="extraFor" data-id="${next.id}" style="margin-top:14px">What if I pay extra?</button>
     </section>` : ''}
     <section class="card glass">
       <div class="micro">This month</div>
@@ -250,11 +252,70 @@ function viewHome(){
     </section>
     <section class="card glass span-all" aria-labelledby="simT">
       <h2 class="micro" id="simT">What if you paid extra</h2>
+      <p class="muted" style="margin:6px 0 10px">Try one account at a time, or everything together.</p>
+      <div class="chips" role="group" aria-label="Try extra on one account" style="margin-bottom:16px">${openAccounts().map(a=>`<button class="chip try-acc" data-act="extraFor" data-id="${a.id}">${avatar(a,22,9)}<span>${esc(a.name)}</span></button>`).join('')}</div>
+      <div class="micro" style="margin-top:4px">All accounts</div>
       <div class="sim-input"><span class="mid">$</span><label class="sr-only" for="simIn">Extra per month</label><input id="simIn" inputmode="decimal" placeholder="0" value="${simExtra||''}"><span class="muted">a month</span></div>
       <div class="chips" role="group" aria-label="Quick amounts">${[50,100,200,500].map(v=>`<button class="chip" data-extra="${v}" aria-pressed="${simExtra===v}">$${v}</button>`).join('')}<button class="chip" data-extra="0">Clear</button></div>
       <p id="simOut" class="muted" aria-live="polite" style="margin:14px 0 0;font-size:15px"></p>
     </section>
   </div>`;
+}
+let homeExplore = false, lastGlobePct = null;
+function progressColor(p){
+  // continuous warm->cool ramp in OKLCH: red -> orange -> yellow -> lime/mint -> green
+  const K=[[0,.67,.22,28],[.1,.67,.22,28],[.35,.79,.18,62],[.6,.88,.18,96],[.82,.86,.2,128],[1,.79,.21,148]];
+  p=Math.max(0,Math.min(1,p)); let i=0; while(i<K.length-2 && p>K[i+1][0]) i++;
+  const [a,b]=[K[i],K[i+1]]; const f=(p-a[0])/((b[0]-a[0])||1); const L=a[1]+(b[1]-a[1])*f, C=a[2]+(b[2]-a[2])*f, H=a[3]+(b[3]-a[3])*f;
+  return `oklch(${L.toFixed(3)} ${C.toFixed(3)} ${H.toFixed(1)})`;
+}
+function globeHTML(pct, left){
+  const col = progressColor(pct); const fill = 0.06 + 0.94*pct; // thin layer at 0%
+  const lvl = 186 - fill*172;                                      // y of liquid surface in a 200x200 box
+  const from = lastGlobePct === null ? lvl : 186 - (0.06 + 0.94*lastGlobePct)*172;
+  const wave = (amp,ph) => { let d=`M-200 ${0}`; for (let x=-200;x<=400;x+=10) d += ` L${x} ${(Math.sin((x+ph)/24)*amp).toFixed(2)}`; return d + ' L400 220 L-200 220 Z'; };
+  const label = `Total debt left ${money(left)}, ${Math.round(pct*100)}% paid`;
+  return `<div class="globe" role="img" aria-label="${esc(label)}" style="--pc:${col}">
+   <svg viewBox="0 0 200 200" aria-hidden="true">
+    <defs>
+      <clipPath id="gClip"><circle cx="100" cy="100" r="86"/></clipPath>
+      <radialGradient id="gGlass" cx="38%" cy="30%" r="75%"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".45" stop-color="#fff" stop-opacity=".12"/><stop offset="1" stop-color="#fff" stop-opacity=".04"/></radialGradient>
+      <linearGradient id="gLiq" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--pc);stop-opacity:.95"/><stop offset="1" style="stop-color:var(--pc);stop-opacity:.7"/></linearGradient>
+      <radialGradient id="gSpec" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    </defs>
+    <circle cx="100" cy="100" r="86" class="g-body"/>
+    <g clip-path="url(#gClip)">
+      <g class="g-liquid" style="transform:translateY(${from}px)" data-to="${lvl}">
+        <path class="g-wave w2" d="${wave(3.2,40)}" style="fill:var(--pc);opacity:.45"/>
+        <path class="g-wave w1" d="${wave(4,0)}" fill="url(#gLiq)"/>
+        <path class="g-meniscus" d="${wave(4,0).split(' L400 220')[0]}" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1.2"/>
+        ${[30,70,110,150].map((x,i)=>`<circle class="g-bubble" cx="${x}" cy="${40+i*12}" r="${1.6+i%2}" style="--bd:${i*1.3}s"/>`).join('')}
+        <ellipse cx="70" cy="30" rx="30" ry="5" fill="#fff" opacity=".18"/>
+      </g>
+    </g>
+    <circle cx="100" cy="100" r="86" fill="url(#gGlass)"/>
+    <ellipse cx="72" cy="52" rx="28" ry="16" fill="url(#gSpec)" opacity=".75" transform="rotate(-30 72 52)"/>
+    <circle cx="100" cy="100" r="86" fill="none" class="g-rim"/>
+   </svg>
+   <div class="globe-text"><span class="globe-amt">${money(left)}</span><span class="globe-sub">left to pay</span></div>
+  </div>`;
+}
+function viewHome(){
+  const t = totals(); const sim = simulate(S.accounts); const open = openAccounts();
+  const pct = t.total ? t.paid/t.total : 0;
+  const html = `<h1 class="large-title">Home</h1>
+  <section class="globe-hero" aria-label="Debt progress">
+    ${globeHTML(pct, t.left)}
+    <p class="globe-free">${sim.freeDate ? `<button class="badge" data-act="toProgress">${debtFree(sim.freeDate)} ›</button>` : open.length ? '' : 'Every account is paid off. Nice work.'}</p>
+    <p class="globe-pct"><b>${Math.round(pct*100)}% paid</b> · ${money(t.paid)} of ${money(t.total)} · ${plural(open.length,'account')} to go</p>
+    <button class="btn explore glass" data-act="explore" aria-expanded="${homeExplore}" aria-controls="homeFeed">${homeExplore?'Show less ↑':'Explore more ↓'}</button>
+  </section>
+  <div class="grid home-banners">    ${S.banner ? `<div class="banner span-all ${S.banner.good?'good':''}" role="status"><span><b>${esc(S.banner.text.split(' after ')[0])}</b> after ${esc(S.banner.text.split(' after ').slice(1).join(' after '))}</span><button aria-label="Dismiss" data-act="dismissBanner">✕</button></div>` : ''}
+    ${!S.flags.backupTip ? `<div class="banner span-all" role="note"><span>${icon.info}</span><span>Tip: ${STORAGE_MSG}</span><button class="btn sm" data-act="export" style="margin-left:auto;width:auto">Export</button><button aria-label="Dismiss tip" data-act="dismissTip" style="margin-left:0">✕</button></div>`:''}
+</div>
+  <div id="homeFeed" class="feed" ${homeExplore?'':'hidden'}>${homeFeedHTML()}</div>`;
+  lastGlobePct = pct;
+  return html;
 }
 function simText(){
   const base = simulate(S.accounts), w = simulate(S.accounts,{extra:simExtra});
@@ -427,6 +488,49 @@ function bindExtra(m){
   m.querySelectorAll('[data-act=calDay]').forEach(b => b.addEventListener('click', () => openDay(+b.dataset.day, b)));
 }
 
+// ---------- Per-account what-if (preview only) ----------
+function extraResult(acc, amt){
+  const base = simulate(S.accounts), w = simulate(S.accounts, { extraFor:{ id:acc.id, amount:amt } });
+  const months = r => { const d = r.payoff[acc.id]; return d ? monthsBetween(new Date(new Date().getFullYear(), new Date().getMonth(), 1), d) + 1 : null; };
+  return { base, w, d0: base.payoff[acc.id], d1: w.payoff[acc.id], n0: months(base), n1: months(w), pay: w.firstPay[acc.id] || 0, saved: (base.interest[acc.id]||0) - (w.interest[acc.id]||0) };
+}
+function openExtraFor(acc, trigger){
+  if (!acc) return; let amt = 0;
+  const body = `<p class="muted" style="margin-top:0">${esc(acc.name)} · ${money2(acc.balance)} left · plan ${money2(simulate(S.accounts).firstPay[acc.id]||acc.min)}/mo. This is a preview; your plan doesn’t change.</p>
+    <div class="sim-input"><span class="mid">$</span><label class="sr-only" for="xIn">Extra per month for ${esc(acc.name)}</label><input id="xIn" inputmode="decimal" placeholder="0"><span class="muted">extra a month</span></div>
+    <div class="chips" role="group" aria-label="Quick amounts">${[25,50,100,200].map(v=>`<button type="button" class="chip" data-x="${v}" aria-pressed="false">$${v}</button>`).join('')}<button type="button" class="chip" data-x="0">Clear</button></div>
+    <div id="xOut" class="x-out" aria-live="polite"></div>
+    <div class="form-actions"><button class="btn" data-close>Close</button></div>`;
+  openDialog({ title:'What if I pay extra?', body, trigger, onMount: sh => {
+    const out = sh.querySelector('#xOut'), inp = sh.querySelector('#xIn');
+    const draw = () => { const r = extraResult(acc, amt); const sooner = (r.d0 && r.d1) ? monthsBetween(r.d1, r.d0) : 0;
+      sh.querySelectorAll('[data-x]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.x === amt && amt > 0)));
+      out.innerHTML = `<div class="x-head"><b>${r.d1 ? 'Paid off by ' + fmtMonth(r.d1) : 'No payoff date yet'}</b>${amt>0 && r.d1 ? ` — ${sooner>0 ? plural(sooner,'month')+' sooner' : 'same month'}` : ''}</div>
+        <div class="stats" style="margin-top:12px"><div class="stat"><b>${money2(r.pay)}</b><span>Monthly payment${amt>0?' (plan + extra)':''}</span></div><div class="stat"><b>${r.n1 ? plural(r.n1,'payment') : '—'}</b><span>Payments left</span></div>
+        ${acc.apr ? `<div class="stat"><b>${money2(Math.max(0,r.saved))}</b><span>Interest saved</span></div>` : `<div class="stat"><b>—</b><span>No interest rate entered</span></div>`}
+        <div class="stat"><b>${r.w.freeDate ? fmtMonth(r.w.freeDate) : '—'}</b><span>Debt free overall</span></div></div>`; };
+    inp.addEventListener('input', () => { amt = Math.max(0, parseFloat(inp.value.replace(/[^0-9.]/g,''))||0); draw(); });
+    sh.querySelectorAll('[data-x]').forEach(b => b.addEventListener('click', () => { amt = +b.dataset.x; inp.value = amt || ''; draw(); }));
+    sh.querySelector('.form-actions [data-close]').addEventListener('click', closeTop);
+    draw();
+  }});
+}
+
+// ---------- Anubis strike: quick GIF-style clip on a logged payment (non-blocking) ----------
+function anubisStrike(amount){
+  if (S.settings.strike === false) return;
+  document.querySelector('.strike')?.remove();
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const el = document.createElement('div'); el.className = 'strike glass' + (reduced ? ' still' : ''); el.setAttribute('role','status'); el.setAttribute('aria-live','polite');
+  el.innerHTML = `<div class="strike-stage" aria-hidden="true"><img src="logos/anubis/anubis-800.webp" alt="">
+    <svg class="strike-fx" viewBox="0 0 200 140"><g class="s-card"><g class="s-l"><rect x="58" y="70" width="44" height="40" rx="6"/><rect x="62" y="80" width="30" height="6" rx="2" class="s-strip"/></g><g class="s-r"><rect x="98" y="70" width="44" height="40" rx="6"/><rect x="102" y="96" width="24" height="5" rx="2" class="s-strip"/></g></g>
+    <path class="s-slash" d="M30 128 L172 34"/>${[0,1,2,3,4,5].map(i=>`<circle class="s-spark" cx="100" cy="88" r="2.2" style="--sx:${[-40,30,-22,44,-8,16][i]}px;--sy:${[-30,-36,22,10,-44,30][i]}px"/>`).join('')}</svg></div>
+    <div class="strike-txt"><b>${money2(amount)}</b> struck down</div>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.classList.add('out'), reduced ? 1400 : 1150);
+  setTimeout(() => el.remove(), reduced ? 1700 : 1450);
+}
+
 // ---------- Payoff celebration ----------
 function celebrate(acc, prevPlan){
   if (acc.celebrated) return; acc.celebrated = true; save();
@@ -452,7 +556,7 @@ function celebrate(acc, prevPlan){
     <g transform="translate(0,40)">${confetti}</g>
   </svg>`;
   const nextLine = next ? `Its ${money2(roll)} payment now rolls into ${esc(next.name)}.` : 'That was the last one. You’re debt free!';
-  openDialog({ title:'Knocked out!', trigger: document.activeElement, body:`<div class="cel">${art}
+  openDialog({ title: next ? 'Knocked out!' : 'Debt free!', trigger: document.activeElement, body:`<div class="cel ${next?'':'cel-free'}">${next?'':'<img class="cel-anubis" src="logos/anubis/anubis-800.webp" alt="" aria-hidden="true">'}${art}
     <h3 class="cel-title">${esc(acc.name)} is paid off!</h3>
     <p class="cel-sub">That’s ${money2(acc.start)} gone. ${nextLine}</p>
     <div class="form-actions"><button class="btn" id="celShare">Share</button><button class="btn primary" data-close>Keep going</button></div></div>`,
@@ -587,6 +691,8 @@ function viewProgress(){
 function bindView(){
   const m = $('#main');
   bindExtra(m);
+  const gl = m.querySelector('.g-liquid'); if (gl) requestAnimationFrame(() => requestAnimationFrame(() => { gl.style.transform = `translateY(${gl.dataset.to}px)`; }));
+  const feed = m.querySelector('#homeFeed'); if (feed && !feed.hidden) observeReveal(feed);
   m.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', e => act(b.dataset.act, b, e)));
   m.querySelectorAll('[data-extra]').forEach(b => b.addEventListener('click', () => { simExtra = +b.dataset.extra; $('#simIn').value = simExtra||''; refreshSim(); }));
   const si = $('#simIn'); if (si){ si.addEventListener('input', () => { simExtra = Math.max(0, parseFloat(si.value.replace(/[^0-9.]/g,''))||0); refreshSim(); }); refreshSim(); }
@@ -595,6 +701,13 @@ function bindView(){
     const show = e => { const el = e.target.closest('[data-tip]'); if (!el){ tip.style.opacity=0; return; } tip.textContent = el.dataset.tip; const r = c.getBoundingClientRect(); const pt = e.touches?e.touches[0]:e; tip.style.left = Math.min(r.width-160, Math.max(0, pt.clientX - r.left + 10))+'px'; tip.style.top = (pt.clientY - r.top - 36)+'px'; tip.style.opacity = 1; };
     c.addEventListener('pointermove', show); c.addEventListener('pointerdown', show); c.addEventListener('pointerleave', () => tip.style.opacity = 0);
   });
+}
+let revealObs = null;
+function observeReveal(root){
+  const items = root.querySelectorAll('.feed-grid > *');
+  if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches){ items.forEach(i=>i.classList.add('in')); return; }
+  revealObs?.disconnect(); revealObs = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ e.target.classList.add('in'); revealObs.unobserve(e.target); } }), { rootMargin:'0px 0px -8% 0px' });
+  items.forEach(i => { i.classList.add('reveal'); revealObs.observe(i); });
 }
 function refreshSim(){ const o = $('#simOut'); if (o) o.innerHTML = simText(); document.querySelectorAll('[data-extra]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.extra===simExtra && simExtra>0))); }
 
@@ -611,6 +724,10 @@ function act(a, el){
     case 'check': return openCheck(el);
     case 'calAll': return openCalendar(el);
     case 'summary': return openSummary(el);
+    case 'extraFor': return openExtraFor(acc, el);
+    case 'explore': { homeExplore = !homeExplore; const f = $('#homeFeed'); f.hidden = !homeExplore; el.setAttribute('aria-expanded', String(homeExplore)); el.textContent = homeExplore ? 'Show less ↑' : 'Explore more ↓';
+      const sm = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+      if (homeExplore){ observeReveal(f); f.scrollIntoView({ behavior: sm, block: 'start' }); } else window.scrollTo({ top: 0, behavior: sm }); return; }
   }
 }
 
@@ -736,7 +853,7 @@ function openDetail(acc, trigger){
       <div class="segmented" role="radiogroup" aria-label="Payoff pace">${opts}</div>
       <p class="muted" style="margin:10px 0 0">${a.tier?`Aims to clear it in about ${plural(TIERS[a.tier].months,'month')}: ${money2(Math.max(a.min,Math.ceil(a.balance/TIERS[a.tier].months)))} a month, plus anything rolled over.`:'No pace set. It pays the minimum and waits its turn in the snowball. Pick a pace to give it a deadline.'}
       ${a.tier?' <button class="link-btn" id="clearTier">Back to snowball pace</button>':''}</p>
-      <div class="actions">${a.balance>0.004?'<button class="btn primary block" id="dLog">Log a payment</button>':''}<button class="btn block" id="dEdit">Edit account</button>
+      <div class="actions">${a.balance>0.004?'<button class="btn primary block" id="dLog">Log a payment</button>':''}<button class="btn block" id="dEdit">Edit account</button>${a.balance>0.004?'<button class="btn block" id="dExtra">What if I pay extra?</button>':''}
       ${a.dueDay?`<a class="btn block" href="${calUrl(a)}" target="_blank" rel="noopener">Add monthly reminder to Google Calendar</a>`:'<p class="small" style="margin:0;text-align:center">Set a due day to add a calendar reminder.</p>'}
       <button class="btn block" data-close2>Close</button></div>`;
     sh.querySelector('h2').textContent = a.name;
@@ -744,6 +861,7 @@ function openDetail(acc, trigger){
     sh.querySelector('#clearTier')?.addEventListener('click', () => { a.tier = null; noteChange('changing the pace on '+a.name); render(); draw(sh); });
     sh.querySelector('#dLog')?.addEventListener('click', e => openLog(a, e.currentTarget));
     sh.querySelector('#dEdit').addEventListener('click', e => openAccountForm(a, e.currentTarget));
+    sh.querySelector('#dExtra')?.addEventListener('click', e => openExtraFor(a, e.currentTarget));
     sh.querySelector('[data-close2]').addEventListener('click', closeTop);
   };
   openDialog({ title:acc.name, body:'', trigger, onMount: draw });
@@ -771,7 +889,7 @@ function openLog(acc, trigger){
       S.payments.push({ id:uid(), accountId:acc.id, amount:r2(amt), date });
       noteChange('logging a payment');
       closeAll(); render();
-      if (acc.balance <= 0.004) celebrate(acc, prevPlan); else toast(`${money2(amt)} logged`);
+      if (acc.balance <= 0.004) celebrate(acc, prevPlan); else { toast(`${money2(amt)} logged`); anubisStrike(amt); }
     });
   }});
 }
@@ -855,13 +973,15 @@ function openSettings(trigger){
    <div class="field"><label for="s_months">Default number of payments</label><select id="s_months" aria-describedby="s_months-h">${[4,5,6,7,8].map(n=>`<option value="${n}" ${s.defaultMonths===n?'selected':''}>${plural(n,'payment')}</option>`).join('')}</select>
    <div class="help" id="s_months-h">For an account with no pace set, the one you’re focused on aims to be paid off in this many monthly payments.</div></div>
    <div class="switch"><label for="s_dark"><b>Dark mode</b></label><input type="checkbox" role="switch" id="s_dark" ${s.theme==='dark'?'checked':''} ${s.followSystem?'disabled':''}></div>
+   <div class="switch"><label for="s_strike"><b>Anubis strike when you log a payment</b></label><input type="checkbox" role="switch" id="s_strike" ${s.strike!==false?'checked':''}></div>
    <div class="switch"><label for="s_sys"><b>Match system appearance</b></label><input type="checkbox" role="switch" id="s_sys" ${s.followSystem?'checked':''}></div>
    <div class="form-actions"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn primary">Save changes</button></div>
   </form><hr class="sep">
   <h3 class="micro">Backup</h3><p class="small" style="margin:6px 0 10px">${STORAGE_MSG}</p>
   <div class="toolbar"><button class="btn sm" id="expJ">Export backup</button><button class="btn sm" id="impJ">Import backup</button><button class="btn sm" id="expC">Export CSV of payments</button>
   <input type="file" id="impFile" accept="application/json,.json" hidden aria-label="Backup file"></div><div class="err" id="impMsg" hidden></div>
-  <hr class="sep"><button class="btn block" id="eraseBtn" style="color:var(--red)">Erase everything</button>`;
+  <hr class="sep"><button class="btn block" id="eraseBtn" style="color:var(--red)">Erase everything</button>
+  <hr class="sep"><div class="about"><img src="logos/anubis/anubis-512.png" alt="Anubis illustration" width="72" height="72" loading="lazy"><div><h3 class="micro" style="margin:0 0 4px">About Debt Killer</h3><p class="small" style="margin:0">A debt-snowball planner that keeps everything in this browser. ${STORAGE_MSG}</p></div></div>`;
   openDialog({ title:'Settings', body, trigger, onMount: sh => {
     const f = sh.querySelector('form'); f.querySelector('[data-close]').addEventListener('click', closeTop);
     const prevTheme = s.theme, prevSys = s.followSystem;
@@ -869,7 +989,7 @@ function openSettings(trigger){
     f.s_sys.addEventListener('change', () => { s.followSystem = f.s_sys.checked; f.s_dark.disabled = s.followSystem; applyTheme(); });
     sh._revert = () => { s.theme = prevTheme; s.followSystem = prevSys; applyTheme(); };
     f.addEventListener('submit', e => { e.preventDefault(); const b = num(f.s_budget.value); const er = (b!==null && (isNaN(b)||b<0)) ? 'Budget must be $0 or more.' : null; setErr(f,'s_budget',er); if (er){ f.s_budget.focus(); return; }
-      s.budget = b || null; s.defaultMonths = +f.s_months.value; sh._saved = true; noteChange('updating settings'); closeAll(); render(); toast('Settings saved'); });
+      s.budget = b || null; s.defaultMonths = +f.s_months.value; s.strike = f.s_strike.checked; sh._saved = true; noteChange('updating settings'); closeAll(); render(); toast('Settings saved'); });
     sh.querySelector('#expJ').addEventListener('click', exportJSON);
     sh.querySelector('#expC').addEventListener('click', exportCSV);
     sh.querySelector('#impJ').addEventListener('click', () => sh.querySelector('#impFile').click());
