@@ -430,3 +430,90 @@ main{padding-bottom:calc(110px + env(safe-area-inset-bottom))!important}
 @media (max-width:340px){.summary-row{gap:var(--sp-3);padding:var(--sp-4)}}
 .stat b,.big,.mid,.tile-bal,.list li b{overflow-wrap:anywhere}
 .list li>span{min-width:0}
+
+/* =================== Vibrant iOS palette (visual only) =================== */
+:root{
+  --blue:#007AFF; --blue-glow:rgba(0,122,255,.35);
+  --accent:#0066D6; --accent-glow:rgba(0,122,255,.38);
+  --green-bar:#34C759; --green-glow:rgba(52,199,89,.45); --green:#1A7F37; --green-soft:#D9F7E2; --green-soft-stop:#9BEAB4;
+  --amber:#FF9F0A; --amber-glow:rgba(255,159,10,.6);
+  --red:#D70015; --red-glow:rgba(255,59,48,.45);
+  --cat-credit:#007AFF; --cat-bnpl:#AF52DE; --cat-store:#30B0C7; --cat-auto:#5E6E8C; --cat-student:#34C759; --cat-personal:#FF2D55; --cat-medical:#FF3B30; --cat-other:#8E8E93;
+  --catf-credit:#CFE5FF; --catf-bnpl:#F0D9FF; --catf-store:#CDEFF6; --catf-auto:#DDE2EC; --catf-student:#CFF5DA; --catf-personal:#FFD3DE; --catf-medical:#FFD6D3; --catf-other:#E5E5EA;
+  --conf-1:#FF7A45; --conf-3:#FFC78A; --conf-7:#FF453A;
+  --glow-s:6px; --glow-m:10px;
+}
+[data-theme=dark]{
+  --blue:#0A84FF; --blue-glow:rgba(10,132,255,.6);
+  --accent:#0A84FF; --accent-ink:#ffffff; --accent-glow:rgba(10,132,255,.55);
+  --green-bar:#30D158; --green-glow:rgba(48,209,88,.6); --green:#30D158; --green-soft:rgba(48,209,88,.18); --green-soft-stop:#7EF0A0;
+  --amber:#FF9F0A; --amber-glow:rgba(255,159,10,.75);
+  --red:#FF6961; --red-glow:rgba(255,69,58,.6);
+  --cat-credit:#0A84FF; --cat-bnpl:#BF5AF2; --cat-store:#40CBE0; --cat-auto:#8A9BBF; --cat-student:#30D158; --cat-personal:#FF375F; --cat-medical:#FF453A; --cat-other:#98989D;
+  --glow-s:8px; --glow-m:14px;
+}
+/* accent button: vivid blue + soft glow; dark uses white ink on #0A84FF? (3.6) -> keep dark ink for AA */
+[data-theme=dark]{--accent-ink:#06101f}
+.btn.primary{box-shadow:0 4px 16px var(--accent-glow)}
+.link-btn,.legend-box summary{color:var(--accent)}
+[data-theme=dark] .link-btn,[data-theme=dark] .legend-box summary{color:#409CFF}
+/* progress bars / rings */
+.bar>i{background:linear-gradient(90deg,var(--green-soft-stop),var(--green-bar));box-shadow:0 0 var(--glow-m) var(--green-glow)}
+.hero .bar>i{background:linear-gradient(90deg,#28B84E,#30D158);box-shadow:0 0 14px rgba(48,209,88,.6)}
+.ring-glow{filter:drop-shadow(0 0 3px currentColor)}
+.mini-ring .ring-glow,svg .ring-glow{filter:drop-shadow(0 0 4px rgba(255,255,255,0)) drop-shadow(0 0 var(--glow-s) var(--green-glow))}
+.mini-ring circle.ring-glow{filter:drop-shadow(0 0 3px var(--blue-glow))}
+.line-glow{filter:drop-shadow(0 0 5px var(--glow))}
+.bar-glow{filter:drop-shadow(0 0 5px color-mix(in srgb,var(--glow) 55%,transparent))}
+/* hero gauge stays amber */
+.hero .badge{background:rgba(255,159,10,.18);color:#FFB340;box-shadow:0 0 14px rgba(255,159,10,.25)}
+.hero::after{border-color:rgba(255,159,10,.10)}
+/* green paid / done */
+.badge{box-shadow:0 0 12px var(--green-glow)}
+.rank-done{background:var(--green-bar);color:#06210f;box-shadow:0 0 8px var(--green-glow)}
+.pace-done{background:var(--green-soft);color:var(--green);box-shadow:0 0 8px var(--green-glow)}
+/* category accents */
+.cat-dot{box-shadow:0 0 var(--glow-s) var(--cat)}
+.folder::before{background:linear-gradient(180deg,color-mix(in srgb,var(--cat) 20%,transparent),transparent)}
+.folder{box-shadow:var(--shadow),0 0 0 1px color-mix(in srgb,var(--cat) 18%,transparent)}
+.cat-chip i{box-shadow:0 0 6px var(--cat)}
+.cal-dots i{box-shadow:0 0 6px currentColor;color:inherit}
+.cal-pill{border-left-color:var(--cat);box-shadow:-2px 0 8px -2px var(--cat)}
+/* pace */
+.pace-aggressive{background:linear-gradient(90deg,#C93400,#D70015);color:#fff;box-shadow:0 0 12px rgba(255,100,20,.5)}
+.tile.t-aggressive{background:linear-gradient(150deg,rgba(255,120,30,.26),rgba(255,59,48,.16) 60%,var(--card));border-color:rgba(255,110,30,.6);box-shadow:0 0 18px rgba(255,110,30,.28),inset 0 1px 0 rgba(255,255,255,.5)}
+.pace-moderate{background:#D6E8FF;color:#0050B8;box-shadow:0 0 8px rgba(0,122,255,.25)}
+.pace-conservative{background:#CDF4F0;color:#00685F;box-shadow:0 0 8px rgba(0,199,190,.25)}
+.tile.t-moderate{background:linear-gradient(150deg,rgba(0,122,255,.14),var(--card) 70%)}
+.tile.t-conservative{background:linear-gradient(150deg,rgba(0,199,190,.14),var(--card) 70%)}
+[data-theme=dark] .pace-moderate{background:rgba(10,132,255,.24);color:#7DBBFF}
+[data-theme=dark] .pace-conservative{background:rgba(102,212,207,.2);color:#7FE5DF}
+/* due urgency */
+.due-overdue{background:#9B0F22;color:#fff;box-shadow:0 0 10px rgba(215,0,21,.45)}
+.due-today{background:#D70015;color:#fff;box-shadow:0 0 12px var(--red-glow)}
+@keyframes pulse{0%,100%{box-shadow:0 0 6px rgba(255,59,48,.45)}50%{box-shadow:0 0 16px rgba(255,59,48,.75)}}
+.due-soon{background:#FFE0B8;color:#8A3A00;box-shadow:0 0 8px rgba(255,149,0,.3)}
+.due-week{background:#FFF2A8;color:#5C4600;box-shadow:0 0 8px rgba(255,204,0,.3)}
+[data-theme=dark] .due-overdue{background:#A3122A;color:#fff;box-shadow:0 0 12px rgba(255,69,58,.5)}
+[data-theme=dark] .due-today{background:#D70015;color:#fff}
+[data-theme=dark] .due-soon{background:rgba(255,159,10,.24);color:#FFB340;box-shadow:0 0 10px rgba(255,159,10,.3)}
+[data-theme=dark] .due-week{background:rgba(255,214,10,.2);color:#FFE066;box-shadow:0 0 10px rgba(255,214,10,.25)}
+.flag-today{background:#FF3B30;box-shadow:0 0 8px var(--red-glow)}
+.flag-overdue{background:#9B0F22;box-shadow:0 0 8px rgba(215,0,21,.5)}
+.cal-cell.u-today{box-shadow:inset 0 0 0 2px #FF3B30,0 0 12px rgba(255,59,48,.35)}
+.cal-cell.u-overdue{box-shadow:inset 0 0 0 2px #9B0F22,0 0 10px rgba(215,0,21,.3)}
+.cal-cell.today .cal-num{box-shadow:0 0 10px var(--accent-glow)}
+/* active tab */
+.tab[aria-current=page]{color:var(--blue)}
+.tab[aria-current=page] svg{filter:drop-shadow(0 0 6px var(--blue-glow))}
+[data-theme=dark] .tab[aria-current=page]{color:#0A84FF}
+:root:not([data-theme=dark]) .tab[aria-current=page]{color:#0066D6}
+.err{color:var(--red)}
+@media (prefers-reduced-motion:reduce){.due-today{animation:none}}
+.ring-glow,.mini-ring .ring-glow,svg .ring-glow,.mini-ring circle.ring-glow{filter:drop-shadow(0 0 calc(var(--glow-s) / 2) currentColor)}
+.cal-dots i{box-shadow:0 0 6px var(--c)}
+:root:not([data-theme=dark]){--green:#13702F}
+[data-theme=dark] .tab[aria-current=page]{color:#3D9BFF}
+/* light mode: deeper ends/variants so graphics keep >=3:1 against white */
+:root:not([data-theme=dark]){--cat-store:#008299;--cat-student:#248A3D}
+:root:not([data-theme=dark]) .bar>i{background:linear-gradient(90deg,#34C759,#248A3D)}

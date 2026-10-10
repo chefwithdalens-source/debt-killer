@@ -4,14 +4,14 @@ const KEY = 'debt-killer:v1';
 const STORAGE_MSG = 'Saved on this device only. Export a backup to keep a copy or move to another device.';
 const TYPES = ['Credit card','Store card','Buy now pay later','Auto loan','Student loan','Personal loan','Medical','Other'];
 const CAT = {
-  'Credit card':      { key:'credit',   label:'Credit cards',      strong:'#3B82F6', fill:'#c4d9fc' },
-  'Store card':       { key:'store',    label:'Store cards',       strong:'#14B8A6', fill:'#b8ebe3' },
-  'Buy now pay later':{ key:'bnpl',     label:'Buy now pay later', strong:'#8B5CF6', fill:'#dccffd' },
-  'Auto loan':        { key:'auto',     label:'Auto loans',        strong:'#64748B', fill:'#d6dce4' },
-  'Student loan':     { key:'student',  label:'Student loans',     strong:'#22A55A', fill:'#c6ecd3' },
-  'Personal loan':    { key:'personal', label:'Personal loans',    strong:'#EC4899', fill:'#fbd0e6' },
-  'Medical':          { key:'medical',  label:'Medical',           strong:'#F43F5E', fill:'#fdd1d9' },
-  'Other':            { key:'other',    label:'Other',             strong:'#9CA3AF', fill:'#e2e4e8' },
+  'Credit card':      { key:'credit',   label:'Credit cards',      strong:'var(--cat-credit)', fill:'var(--catf-credit)' },
+  'Store card':       { key:'store',    label:'Store cards',       strong:'var(--cat-store)', fill:'var(--catf-store)' },
+  'Buy now pay later':{ key:'bnpl',     label:'Buy now pay later', strong:'var(--cat-bnpl)', fill:'var(--catf-bnpl)' },
+  'Auto loan':        { key:'auto',     label:'Auto loans',        strong:'var(--cat-auto)', fill:'var(--catf-auto)' },
+  'Student loan':     { key:'student',  label:'Student loans',     strong:'var(--cat-student)', fill:'var(--catf-student)' },
+  'Personal loan':    { key:'personal', label:'Personal loans',    strong:'var(--cat-personal)', fill:'var(--catf-personal)' },
+  'Medical':          { key:'medical',  label:'Medical',           strong:'var(--cat-medical)', fill:'var(--catf-medical)' },
+  'Other':            { key:'other',    label:'Other',             strong:'var(--cat-other)', fill:'var(--catf-other)' },
 };
 const TYPE_HEX = Object.fromEntries(Object.entries(CAT).map(([k,v])=>[k,v.fill]));
 const TYPE_COLORS = TYPE_HEX;
@@ -206,7 +206,7 @@ function gauge(pct, size=120, dark=true){
   const p = Math.max(0, Math.min(1, pct));
   return `<svg class="gauge" width="${size}" height="${size/2+18}" viewBox="0 0 ${size} ${size/2+18}" role="img" aria-label="${Math.round(p*100)} percent paid">
     <path d="M10 ${size/2+6} A ${r} ${r} 0 0 1 ${size-10} ${size/2+6}" fill="none" stroke="${dark?'rgba(255,255,255,.14)':'var(--fill2)'}" stroke-width="12" stroke-linecap="round"/>
-    <path d="M10 ${size/2+6} A ${r} ${r} 0 0 1 ${size-10} ${size/2+6}" fill="none" stroke="#f2a93b" stroke-width="12" stroke-linecap="round" stroke-dasharray="${c*p} ${c}"/>
+    <path d="M10 ${size/2+6} A ${r} ${r} 0 0 1 ${size-10} ${size/2+6}" fill="none" style="stroke:var(--amber);filter:drop-shadow(0 0 6px var(--amber-glow))" stroke-width="12" stroke-linecap="round" stroke-dasharray="${c*p} ${c}"/>
     <text x="${size/2}" y="${size/2+2}" text-anchor="middle" font-size="22" font-weight="700" fill="${dark?'#f4f1ea':'currentColor'}">${Math.round(p*100)}%</text>
     <text x="${size/2}" y="${size/2+16}" text-anchor="middle" font-size="11" font-weight="700" letter-spacing="1.2" fill="${dark?'#c9c4b8':'currentColor'}">PAID</text></svg>`;
 }
@@ -310,7 +310,7 @@ const PACE_ICON = { aggressive:'<svg width="12" height="12" viewBox="0 0 24 24" 
   moderate:'<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 15h4l3-9 3 12 2-6h4v2h-2.6l-3.4 10-3-12-2 5H4z"/></svg>',
   conservative:'<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3c5 0 8 3.5 8 8 0 5-4 8-8 10-4-2-8-5-8-10 0-4.5 3-8 8-8z" opacity=".9"/></svg>' };
 function paceTag(a){ if (a.balance<=0.004) return `<span class="pace pace-done">✓ Paid off</span>`; return a.tier ? `<span class="pace pace-${a.tier}">${PACE_ICON[a.tier]}${TIERS[a.tier].label}</span>` : `<span class="pace pace-none">Snowball</span>`; }
-function miniRing(pct, color){ const R=11, C=2*Math.PI*R, p=Math.max(0,Math.min(1,pct)); return `<svg class="mini-ring" width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="${R}" fill="none" stroke="var(--fill2)" stroke-width="4"/><circle cx="14" cy="14" r="${R}" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${C*p} ${C}" transform="rotate(-90 14 14)"/></svg>`; }
+function miniRing(pct, color){ const R=11, C=2*Math.PI*R, p=Math.max(0,Math.min(1,pct)); return `<svg class="mini-ring" width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="${R}" fill="none" stroke="var(--fill2)" stroke-width="4"/><circle cx="14" cy="14" r="${R}" fill="none" style="stroke:${color};color:${color}" class="ring-glow" stroke-width="4" stroke-linecap="round" stroke-dasharray="${C*p} ${C}" transform="rotate(-90 14 14)"/></svg>`; }
 
 // ---------- Accounts: App Library-style folders ----------
 function tile(a, rank, sim){
@@ -384,7 +384,7 @@ function viewCalendar(){
     const lvl = urg.some(x=>x.level==='overdue') ? 'overdue' : urg.some(x=>x.level==='today') ? 'today' : '';
     const label = `${MONTHS[m]} ${d}${isToday?', today':''}${list.length?`, ${plural(list.length,'payment')} due: ${list.map(a=>a.name).join(', ')}`:''}${lvl==='overdue'?', overdue':lvl==='today'?', due today':''}`;
     const inner = `<span class="cal-num">${d}</span>${lvl?`<span class="cal-flag flag-${lvl}" aria-hidden="true">${lvl==='overdue'?'!':'•'}</span>`:''}
-      <span class="cal-dots" aria-hidden="true">${list.slice(0,4).map(a=>`<i style="background:${CAT[a.type].strong}"></i>`).join('')}</span>
+      <span class="cal-dots" aria-hidden="true">${list.slice(0,4).map(a=>`<i style="background:${CAT[a.type].strong};--c:${CAT[a.type].strong}"></i>`).join('')}</span>
       <span class="cal-pills" aria-hidden="true">${list.slice(0,3).map(a=>`<span class="cal-pill" style="--cat:${CAT[a.type].strong}">${avatar(a,16,8)}<span>${esc(a.name)}</span></span>`).join('')}${list.length>3?`<span class="small">+${list.length-3} more</span>`:''}</span>`;
     cells += list.length ? `<button class="cal-cell has ${isToday?'today':''} ${lvl?'u-'+lvl:''}" data-act="calDay" data-day="${d}" aria-label="${esc(label)}">${inner}</button>` : `<div class="cal-cell ${isToday?'today':''}" aria-label="${esc(label)}" role="gridcell">${inner}</div>`;
   }
@@ -434,21 +434,21 @@ function celebrate(acc, prevPlan){
   const roll = prevPlan || acc.min;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   try { if (!reduced && navigator.vibrate) navigator.vibrate([30,40,60]); } catch {}
-  const colors = ['#d97757','#f2a93b','#e8c39e','#7aa7e8', CAT[acc.type].strong, '#9fd3b4','#c86b4a'];
+  const colors = ['var(--conf-1)','var(--amber)','var(--conf-3)','var(--blue)', CAT[acc.type].strong, 'var(--green-bar)','var(--conf-7)'];
   const confetti = reduced ? '' : Array.from({length:26},(_,i)=>{ const c = colors[i%colors.length]; const x = 40 + (i*37)%240, dx = ((i*53)%120)-60, r = (i*47)%360, sh = i%3;
-    const shape = sh===0 ? `<rect width="9" height="9" rx="2" fill="${c}"/>` : sh===1 ? `<circle r="5" cx="4" cy="4" fill="${c}"/>` : `<path d="M0 8 L5 0 L10 8z" fill="${c}"/>`;
+    const shape = sh===0 ? `<rect width="9" height="9" rx="2" style="fill:${c}"/>` : sh===1 ? `<circle r="5" cx="4" cy="4" style="fill:${c}"/>` : `<path d="M0 8 L5 0 L10 8z" style="fill:${c}"/>`;
     return `<g class="conf" style="--x:${x}px;--dx:${dx}px;--r:${r}deg;--d:${(i%7)*0.08}s">${shape}</g>`; }).join('');
   const art = `<svg class="cel-art ${reduced?'still':''}" viewBox="0 0 320 220" role="img" aria-label="Illustration: a sun rising behind a cracked card that bursts into confetti">
     <defs><radialGradient id="sunG" cx="50%" cy="100%" r="70%"><stop offset="0" stop-color="#f6c58f"/><stop offset="1" stop-color="#f6c58f" stop-opacity="0"/></radialGradient></defs>
     <rect x="0" y="0" width="320" height="220" rx="24" fill="#f7efe4"/>
     <circle class="glow" cx="160" cy="190" r="150" fill="url(#sunG)"/>
-    <g class="rays" stroke="#d97757" stroke-width="3" stroke-linecap="round" fill="none">
+    <g class="rays" stroke="#FF7A45" stroke-width="3" stroke-linecap="round" fill="none" style="filter:drop-shadow(0 0 4px rgba(255,122,69,.55))">
       ${Array.from({length:9},(_,i)=>{ const ang = Math.PI*(0.1+0.8*i/8); const x1=160-Math.cos(ang)*78, y1=172-Math.sin(ang)*78, x2=160-Math.cos(ang)*104, y2=172-Math.sin(ang)*104; return `<path class="draw" style="--d:${0.3+i*0.05}s" d="M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)}"/>`; }).join('')}</g>
-    <path class="sun" d="M92 172 a68 68 0 0 1 136 0z" fill="#e9a26f" stroke="#c86b4a" stroke-width="3" stroke-linejoin="round"/>
+    <path class="sun" d="M92 172 a68 68 0 0 1 136 0z" fill="#FFA35C" stroke="#E2622F" style="filter:drop-shadow(0 0 10px rgba(255,159,10,.55))" stroke-width="3" stroke-linejoin="round"/>
     <path class="draw" style="--d:.1s" d="M24 174 C 80 168, 120 178, 160 172 S 260 168, 296 175" fill="none" stroke="#7a4a32" stroke-width="3" stroke-linecap="round"/>
     <g class="card-l"><path d="M112 96 h44 l-8 22 l10 16 l-8 22 h-38 a10 10 0 0 1 -10 -10 v-40 a10 10 0 0 1 10 -10z" fill="#fffaf3" stroke="#7a4a32" stroke-width="3" stroke-linejoin="round"/><rect x="112" y="110" width="30" height="8" rx="3" fill="#e8c39e"/></g>
     <g class="card-r"><path d="M156 96 h52 a10 10 0 0 1 10 10 v40 a10 10 0 0 1 -10 10 h-58 l8 -22 l-10 -16z" fill="#fffaf3" stroke="#7a4a32" stroke-width="3" stroke-linejoin="round"/><rect x="176" y="136" width="30" height="7" rx="3" fill="#e8c39e"/></g>
-    <path class="check draw" style="--d:1.1s" d="M136 128 l16 16 l34 -36" fill="none" stroke="#2f9e5e" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <path class="check draw" style="--d:1.1s" d="M136 128 l16 16 l34 -36" fill="none" style="stroke:var(--green-bar)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
     <g transform="translate(0,40)">${confetti}</g>
   </svg>`;
   const nextLine = next ? `Its ${money2(roll)} payment now rolls into ${esc(next.name)}.` : 'That was the last one. You’re debt free!';
@@ -509,23 +509,23 @@ function lineChart(accts, id){
   const dots = [...act.map(p=>({...p,k:'Actual'})), ...proj.map(p=>({...p,k:'Projected'}))];
   const desc = `Balance over time. ${act.length?`Actual: from ${money(act[0].total)} down to ${money(act[act.length-1].total)} today.`:'No payments logged yet.'} Projected plan reaches $0 ${sim.freeDate?'in '+fmtMonth(sim.freeDate):'—'}.`;
   return `<div class="chart" data-chart="${id}"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(desc)}">
-    <defs><linearGradient id="ga${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#34b26a" stop-opacity=".28"/><stop offset="1" stop-color="#34b26a" stop-opacity="0"/></linearGradient>
-    <linearGradient id="gp${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7aa7e8" stop-opacity=".22"/><stop offset="1" stop-color="#7aa7e8" stop-opacity="0"/></linearGradient></defs>
+    <defs><linearGradient id="ga${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--green-bar);stop-opacity:.32"/><stop offset="1" style="stop-color:var(--green-bar);stop-opacity:0"/></linearGradient>
+    <linearGradient id="gp${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--blue);stop-opacity:.24"/><stop offset="1" style="stop-color:var(--blue);stop-opacity:0"/></linearGradient></defs>
     ${grid}${xt}
-    <path d="${area(pP)}" fill="url(#gp${id})"/><path d="${monotonePath(pP)}" fill="none" stroke="#6f9be0" stroke-width="2.5" stroke-dasharray="6 6" stroke-linecap="round"/>
-    ${aP.length>1?`<path d="${area(aP)}" fill="url(#ga${id})"/><path d="${monotonePath(aP)}" fill="none" stroke="#2f9e5e" stroke-width="3" stroke-linecap="round"/>`:''}
+    <path d="${area(pP)}" fill="url(#gp${id})"/><path d="${monotonePath(pP)}" fill="none" class="line-glow" style="stroke:var(--blue);--glow:var(--blue-glow)" stroke-width="2.5" stroke-dasharray="6 6" stroke-linecap="round"/>
+    ${aP.length>1?`<path d="${area(aP)}" fill="url(#ga${id})"/><path d="${monotonePath(aP)}" fill="none" class="line-glow" style="stroke:var(--green-bar);--glow:var(--green-glow)" stroke-width="3" stroke-linecap="round"/>`:''}
     ${dots.map(p=>`<circle cx="${x(+p.date)}" cy="${y(p.total)}" r="9" fill="transparent" data-tip="${p.k} · ${fmtMonShort(p.date)} · ${money(p.total)}"/>`).join('')}
   </svg><div class="tip-box"></div>
-  <div class="legend"><span><i style="background:#2f9e5e"></i>Actual paid down</span><span><i style="background:#6f9be0"></i>Projected plan (dashed)</span></div>
+  <div class="legend"><span><i style="background:var(--green-bar)"></i>Actual paid down</span><span><i style="background:var(--blue)"></i>Projected plan (dashed)</span></div>
   <p class="sr-only">${esc(desc)}</p></div>`;
 }
 function barChart(accts){
-  const data = accts.map(a=>({ name:a.name, paid:Math.max(0,a.start-a.balance), start:a.start, c:TYPE_HEX[a.type] }));
+  const data = accts.map(a=>({ name:a.name, paid:Math.max(0,a.start-a.balance), start:a.start, c:CAT[a.type].strong }));
   const W=420,rowH=44,L=0,H=data.length*rowH+10; const max = Math.max(...data.map(d=>d.start),1);
   const desc = 'Paid off by account. ' + data.map(d=>`${d.name}: ${money(d.paid)} of ${money(d.start)}`).join('; ') + '.';
   return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(desc)}">
   ${data.map((d,i)=>{ const yy=i*rowH; const w=(W-200)*d.start/max, wp=(W-200)*d.paid/max; return `<text x="0" y="${yy+22}" font-weight="600" style="fill:var(--text)">${esc(d.name.slice(0,16))}</text>
-   <rect x="120" y="${yy+8}" width="${w}" height="20" rx="10" fill="var(--fill2)"/><rect x="120" y="${yy+8}" width="${Math.max(wp,wp?20:0)}" height="20" rx="10" fill="${d.c}" data-tip="${esc(d.name)} · ${money(d.paid)} paid of ${money(d.start)}"/>
+   <rect x="120" y="${yy+8}" width="${w}" height="20" rx="10" fill="var(--fill2)"/><rect x="120" y="${yy+8}" width="${Math.max(wp,wp?20:0)}" height="20" rx="10" class="bar-glow" style="fill:${d.c};--glow:${d.c}" data-tip="${esc(d.name)} · ${money(d.paid)} paid of ${money(d.start)}"/>
    <text x="${126+w}" y="${yy+23}">${money(d.paid)}</text>`;}).join('')}
   </svg><div class="tip-box"></div><p class="sr-only">${esc(desc)}</p></div>`;
 }
@@ -535,19 +535,19 @@ function donut(accts){
   if (!tot) return '<p class="muted">Nothing left owed.</p>';
   const R=80, C=2*Math.PI*R, gap = ents.length>1?4:0; let off=0;
   const desc = 'Where the debt sits by type. ' + ents.map(([k,v])=>`${k}: ${money(v)} (${Math.round(v/tot*100)}%)`).join('; ') + '.';
-  const segs = ents.map(([k,v])=>{ const len = v/tot*C; const s = `<circle r="${R}" cx="110" cy="110" fill="none" stroke="${TYPE_HEX[k]}" stroke-width="26" stroke-linecap="${ents.length>1?'round':'butt'}" stroke-dasharray="${Math.max(0.1,len-gap-(ents.length>1?20:0))} ${C}" stroke-dashoffset="${-off - (ents.length>1?10:0)}" transform="rotate(-90 110 110)" data-tip="${k} · ${money(v)}"/>`; off += len; return s; }).join('');
+  const segs = ents.map(([k,v])=>{ const len = v/tot*C; const s = `<circle r="${R}" cx="110" cy="110" fill="none" class="ring-glow" style="stroke:${CAT[k].strong};color:${CAT[k].strong}" stroke-width="26" stroke-linecap="${ents.length>1?'round':'butt'}" stroke-dasharray="${Math.max(0.1,len-gap-(ents.length>1?20:0))} ${C}" stroke-dashoffset="${-off - (ents.length>1?10:0)}" transform="rotate(-90 110 110)" data-tip="${k} · ${money(v)}"/>`; off += len; return s; }).join('');
   return `<div class="chart row" style="flex-wrap:wrap;gap:20px;justify-content:center"><svg viewBox="0 0 220 220" width="220" height="220" role="img" aria-label="${esc(desc)}">${segs}
    <text x="110" y="104" text-anchor="middle" style="font-size:13px">Still owed</text><text x="110" y="128" text-anchor="middle" style="font-size:22px;font-weight:700;fill:var(--text)">${money(tot)}</text></svg>
    <div class="tip-box"></div>
-   <ul class="list" style="min-width:200px">${ents.map(([k,v])=>`<li><i style="width:12px;height:12px;border-radius:4px;background:${TYPE_HEX[k]}"></i><span style="flex:1">${k}</span><b>${money(v)}</b><span class="small">${Math.round(v/tot*100)}%</span></li>`).join('')}</ul>
+   <ul class="list" style="min-width:200px">${ents.map(([k,v])=>`<li><i style="width:12px;height:12px;border-radius:4px;background:${CAT[k].strong}"></i><span style="flex:1">${k}</span><b>${money(v)}</b><span class="small">${Math.round(v/tot*100)}%</span></li>`).join('')}</ul>
    <p class="sr-only">${esc(desc)}</p></div>`;
 }
 function ring(pct, size=180){
   const R=size/2-16, C=2*Math.PI*R, p=Math.max(0,Math.min(1,pct));
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${Math.round(p*100)} percent paid off">
-   <defs><linearGradient id="rg" x1="0" x2="1"><stop offset="0" stop-color="#9fd3b4"/><stop offset="1" stop-color="#2f9e5e"/></linearGradient></defs>
+   <defs><linearGradient id="rg" x1="0" x2="1"><stop offset="0" style="stop-color:var(--green-soft-stop)"/><stop offset="1" style="stop-color:var(--green-bar)"/></linearGradient></defs>
    <circle r="${R}" cx="${size/2}" cy="${size/2}" fill="none" stroke="var(--fill2)" stroke-width="18"/>
-   <circle r="${R}" cx="${size/2}" cy="${size/2}" fill="none" stroke="url(#rg)" stroke-width="18" stroke-linecap="round" stroke-dasharray="${C*p} ${C}" transform="rotate(-90 ${size/2} ${size/2})"/>
+   <circle r="${R}" cx="${size/2}" cy="${size/2}" fill="none" stroke="url(#rg)" class="ring-glow" style="color:var(--green-bar)" stroke-width="18" stroke-linecap="round" stroke-dasharray="${C*p} ${C}" transform="rotate(-90 ${size/2} ${size/2})"/>
    <text x="50%" y="48%" text-anchor="middle" style="font-size:30px;font-weight:700;fill:var(--text)">${Math.round(p*100)}%</text>
    <text x="50%" y="62%" text-anchor="middle" style="font-size:12px;letter-spacing:1.4px;font-weight:700">PAID OFF</text></svg>`;
 }
