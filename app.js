@@ -177,7 +177,7 @@ const icon = {
 
 function viewEmpty(){
   return `<section class="empty card glass">
-    <div class="ill"><svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true"><path d="M4 16l5-5 4 4 7-8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <img class="ill-logo" src="logos/app/logo-80.png" srcset="logos/app/logo-80.png 1x, logos/app/logo-192.png 2x" width="80" height="80" alt="Debt Killer logo">
     <h1>Start the battle</h1>
     <p>Add each debt you owe. Debt Killer lines them up smallest first and tells you what to pay next.</p>
     <button class="btn primary" data-act="add">Add your first account</button>
