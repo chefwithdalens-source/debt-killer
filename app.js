@@ -165,6 +165,7 @@ function go(t){ tab = t; render(); $('#main').focus({preventScroll:true}); windo
 document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => go(b.dataset.tab)));
 $('#settingsBtn').addEventListener('click', e => openSettings(e.currentTarget));
 $('#fab').addEventListener('click', e => openAccountForm(null, e.currentTarget));
+$('#headerAdd').addEventListener('click', e => openAccountForm(null, e.currentTarget));
 
 function applyTheme(){
   let t = S.settings.theme;
@@ -176,13 +177,14 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyThe
 function render(){
   applyTheme();
   document.querySelectorAll('[data-tab]').forEach(b => b.dataset.tab === tab ? b.setAttribute('aria-current','page') : b.removeAttribute('aria-current'));
+  document.querySelector('.tabbar').style.setProperty('--ti', ['home','accounts','calendar','progress'].indexOf(tab));
   const m = $('#main');
   const empty = !S.accounts.length;
   m.innerHTML = `<div class="view">${empty ? viewEmpty() : tab==='accounts' ? viewAccounts() : tab==='calendar' ? viewCalendar() : tab==='progress' ? viewProgress() : viewHome()}</div>`;
   updateFab();
   bindView();
 }
-function updateFab(){ $('#fab').hidden = !S.accounts.length || stack.length > 0 || tab === 'progress'; }
+function updateFab(){ $('#fab').hidden = true; $('#headerAdd').hidden = !S.accounts.length; }
 
 const icon = {
   info:'<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6M12 7.5v.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
@@ -356,7 +358,7 @@ function viewAccounts(){
   return `<h1 class="large-title">Accounts</h1>
   <div class="summary-row glass"><div><span class="micro">Total owed</span><b>${money2(totals().left)}</b></div><div><span class="micro">Accounts</span><b>${open.length} open${done.length?` · ${done.length} paid`:''}</b></div>
     <div><span class="micro">Next due</span><b>${nd?esc(nd.a.name):'—'}</b>${nd?`<span class="due due-${nd.d.level}">${dueIcon[nd.d.level]}${esc(nd.d.text)}</span>`:''}</div></div>
-  <div class="toolbar"><button class="btn sm" data-act="check">Check my balances</button><button class="btn sm" data-act="calAll">Add reminders to Google Calendar</button><button class="btn sm primary" data-act="add">Add account</button></div>
+  <div class="toolbar"><button class="btn sm" data-act="check">Check my balances</button><button class="btn sm" data-act="calAll">Add reminders to Google Calendar</button></div>
   <div class="section-head"><h2>Snowball order</h2><span class="muted">${open.length?plural(open.length,'account')+' to go':'All done'}</span></div>
   <p class="tip">${icon.info}<span>Why smallest first? Each paid-off debt is a quick win, and its payment rolls into the next one. The #1, #2… badges show the order.</span></p>
   ${legendHTML()}

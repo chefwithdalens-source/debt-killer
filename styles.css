@@ -310,3 +310,94 @@ img.logo{width:36px;height:36px;border-radius:10px;display:block;box-shadow:0 1p
 .tile-top{gap:6px}.tile-top .mini-ring{margin-right:0}
 .tile .rank{position:static}
 .tile .name{padding-right:0}
+
+/* =================== Spacing pass =================== */
+:root{--sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:24px;--sp-6:32px;--sp-7:48px;--sp-8:64px;
+  --pad-card:18px;--gap-tiles:14px;--gap-folders:24px;--gap-section:32px;--tabbar-h:72px}
+@media (min-width:700px){:root{--pad-card:24px;--gap-tiles:18px;--gap-folders:28px;--gap-section:40px}}
+@media (min-width:1200px){:root{--gap-tiles:20px;--gap-folders:32px;--gap-section:48px}}
+/* page: bottom clears floating tab bar (+ FAB on phones) */
+main{padding:var(--sp-2) var(--sp-5) calc(var(--tabbar-h) + 72px + var(--sp-5) + env(safe-area-inset-bottom))}
+@media (min-width:700px){main{padding:var(--sp-3) var(--sp-6) calc(var(--tabbar-h) + var(--sp-5) + var(--sp-4) + env(safe-area-inset-bottom))} .fab{display:none!important}}
+@media (min-width:900px){main{padding-bottom:var(--sp-8)}}
+.header-add{display:none}
+@media (min-width:700px){.header-add:not([hidden]){display:inline-flex;align-items:center;gap:6px}}
+.topbar-inner{padding:var(--sp-3) var(--sp-5);gap:var(--sp-4)}
+@media (min-width:700px){.topbar-inner{padding-left:var(--sp-6);padding-right:var(--sp-6)}}
+/* titles + sections */
+.large-title{margin:var(--sp-5) var(--sp-1) var(--sp-2)}
+.subtitle{margin:0 var(--sp-1) var(--sp-5)}
+.section-head{margin:var(--gap-section) var(--sp-1) var(--sp-3)}
+.tip{margin:0 var(--sp-1) var(--sp-4)}
+/* cards (Home/Progress) */
+.card{padding:var(--pad-card)}
+.grid{gap:var(--sp-4)}
+@media (min-width:700px){.grid{gap:var(--sp-5)}}
+.card .bar{margin-top:var(--sp-2)}
+.big{margin:var(--sp-2) 0 var(--sp-4)}
+.mid{margin:var(--sp-2) 0 var(--sp-3)}
+.toolbar{gap:var(--sp-3);margin:var(--sp-4) 0 var(--sp-2)}
+.chips{gap:var(--sp-2)}
+.stats{gap:var(--sp-3)}
+.stat{padding:var(--sp-3) var(--sp-4)}
+.actions{gap:var(--sp-3);margin-top:var(--sp-5)}
+/* Accounts */
+.summary-row{padding:var(--pad-card);gap:var(--sp-4);margin:var(--sp-2) 0 var(--sp-5)}
+.summary-row>div{gap:var(--sp-1)}
+.legend-box{margin:0 var(--sp-1) var(--sp-5)}
+.legend-grid{padding:var(--sp-4);gap:var(--sp-4)}
+.folders{gap:var(--gap-folders)}
+.folder{padding:var(--sp-2) var(--pad-card) var(--pad-card)}
+.folder-btn{padding:var(--sp-3) 0 var(--sp-4)}
+.tiles{gap:var(--gap-tiles)}
+.tile{padding:var(--sp-4);gap:var(--sp-2);min-height:176px}
+@media (max-width:420px){.tile{padding:14px;min-height:168px}.folder{padding-left:14px;padding-right:14px}}
+.tile-top{margin-bottom:var(--sp-1)}
+.tile .name{margin-top:var(--sp-1)}
+.tile-meta{gap:6px;padding-top:var(--sp-2)}
+/* lists */
+.list li{min-height:60px;padding:var(--sp-3) 0;gap:var(--sp-3)}
+/* calendar */
+.cal-head{margin-bottom:var(--sp-4)}
+.cal-grid{gap:6px}
+.cal-cell{padding:var(--sp-2) var(--sp-1);min-height:58px}
+@media (min-width:700px){.cal-grid{gap:var(--sp-2)} .cal-cell{min-height:118px;padding:var(--sp-2)} .cal-pills{gap:var(--sp-1)}}
+@media (min-width:1200px){.cal-cell{min-height:128px}}
+.cal .legend{margin-top:var(--sp-4)!important;gap:var(--sp-4)}
+/* sheets */
+.sheet{padding:var(--sp-3) var(--sp-5) calc(var(--sp-5) + env(safe-area-inset-bottom))}
+@media (min-width:700px){.sheet{padding:var(--sp-5)}}
+.sheet-head{margin:var(--sp-1) 0 var(--sp-5)}
+.field{margin-bottom:var(--sp-4)}
+.two-col{gap:var(--sp-3)}
+.form-actions{gap:var(--sp-3);margin-top:var(--sp-4)}
+/* =================== Floating liquid-glass tab bar (all sizes) =================== */
+.seg-nav{display:none!important}
+.header-add:not([hidden]){display:inline-flex!important;align-items:center;gap:6px}
+@media (max-width:380px){.header-add .lbl-long{display:none}}
+.tabbar{display:flex!important;position:fixed;left:50%;right:auto;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));
+  width:calc(100% - 24px);max-width:560px;border-radius:999px;padding:6px;gap:0;z-index:30;
+  background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.85);
+  box-shadow:0 10px 34px rgba(20,30,50,.16),0 1px 2px rgba(20,30,50,.08),inset 0 1px 0 rgba(255,255,255,.9),inset 0 -1px 0 rgba(255,255,255,.35)}
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.tabbar{backdrop-filter:saturate(190%) blur(22px);-webkit-backdrop-filter:saturate(190%) blur(22px)}}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.tabbar{background:rgba(255,255,255,.96)}}
+[data-theme=dark] .tabbar{background:rgba(32,35,44,.62);border-color:rgba(255,255,255,.14);box-shadow:0 10px 34px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.12)}
+@media (prefers-reduced-transparency:reduce){.tabbar{background:var(--card-solid)!important}}
+.tab-bubble{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/4);border-radius:999px;
+  background:rgba(20,30,50,.07);box-shadow:inset 0 1px 0 rgba(255,255,255,.8),inset 0 0 0 1px rgba(255,255,255,.5);
+  transform:translateX(calc(var(--ti,0) * 100%));transition:transform .42s cubic-bezier(.3,1.35,.5,1)}
+[data-theme=dark] .tab-bubble{background:rgba(255,255,255,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+.tab{position:relative;z-index:1;flex:1;min-height:60px;padding:6px 0 5px;gap:3px;border-radius:999px;background:transparent!important;color:#14171c;font-size:13px;font-weight:500}
+[data-theme=dark] .tab{color:#f3f4f6}
+.tab svg{width:29px;height:29px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tab .ln{fill:none}
+.tab[aria-current=page]{color:var(--accent);font-weight:600}
+.tab[aria-current=page] .ic{fill:currentColor}
+.tab[aria-current=page] .ln{stroke:var(--card-solid)}
+.tab[aria-current=page] svg{stroke-width:1.8}
+.tab:focus-visible{outline-offset:-4px}
+@media (min-width:700px){.tab{font-size:14px;min-height:62px}.tab svg{width:30px;height:30px}}
+/* content always clears the bar (bar 72px + 14px offset + 24px) */
+main{padding-bottom:calc(110px + env(safe-area-inset-bottom))!important}
+.toast{bottom:calc(104px + env(safe-area-inset-bottom))}
+.brand{flex:1!important}

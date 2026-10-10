@@ -29,3 +29,6 @@ The Anubis logo artwork was provided by the app's owner. App icons and favicons 
 - **Due-date colors**: Overdue is maroon, Due today is red, 1–3 days is orange, 4–7 days is amber, and later is grey. A due date is **Overdue** when this month's due date has passed with no payment logged in the 30 days before it (or since) and the date is on or after the day the account was added.
 - **Pace**: Aggressive gets an orange-amber tint with a flame icon, Moderate is soft blue, Conservative is soft teal, and Snowball pace has no tint.
 - **Payoff celebration**: paying an account down to $0 shows a one-time illustrated celebration. With reduced motion turned on, it shows a still image instead.
+
+## Layout
+There's a floating glass tab bar at the bottom on every screen size (Home, Accounts, Calendar, Progress), and Add account sits in the header. Spacing follows a scale from `--sp-1` to `--sp-8` (4, 8, 12, 16, 24, 32, 48 and 64px).
