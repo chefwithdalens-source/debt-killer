@@ -21,3 +21,11 @@ Logo credits: Navy Federal, Capital One, Affirm, Mission Lane and Synchrony icon
 
 ## App logo
 The Anubis logo artwork was provided by the app's owner. App icons and favicons are cropped from it and live in `/logos/app/`.
+
+## Accounts, calendar and colors
+- **Accounts** are grouped into collapsible category folders, laid out like the iPhone App Library. Each tile shows a #1, #2… badge for its place in the snowball order. Which folders are open or closed is a display preference saved in `debt-killer:ui`; it isn't account data.
+- **Calendar tab**: a month grid of due dates, colored by category, with an Upcoming list for the next 7 days.
+- **Category colors**: credit cards are blue, buy now pay later is violet, store cards are teal, auto loans are slate, student loans are green, personal loans are pink, medical is rose, and other is grey.
+- **Due-date colors**: Overdue is maroon, Due today is red, 1–3 days is orange, 4–7 days is amber, and later is grey. A due date is **Overdue** when this month's due date has passed with no payment logged in the 30 days before it (or since) and the date is on or after the day the account was added.
+- **Pace**: Aggressive gets an orange-amber tint with a flame icon, Moderate is soft blue, Conservative is soft teal, and Snowball pace has no tint.
+- **Payoff celebration**: paying an account down to $0 shows a one-time illustrated celebration. With reduced motion turned on, it shows a still image instead.

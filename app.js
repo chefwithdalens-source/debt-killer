@@ -3,8 +3,18 @@
 const KEY = 'debt-killer:v1';
 const STORAGE_MSG = 'Saved on this device only. Export a backup to keep a copy or move to another device.';
 const TYPES = ['Credit card','Store card','Buy now pay later','Auto loan','Student loan','Personal loan','Medical','Other'];
-const TYPE_COLORS = {'Credit card':'var(--c1)','Store card':'var(--c2)','Buy now pay later':'var(--c3)','Auto loan':'var(--c4)','Student loan':'var(--c5)','Personal loan':'var(--c6)','Medical':'var(--c7)','Other':'var(--c8)'};
-const TYPE_HEX = {'Credit card':'#7aa7e8','Store card':'#f2a7a0','Buy now pay later':'#9fd3b4','Auto loan':'#f5cd7a','Student loan':'#b9a6e8','Personal loan':'#8fd0d9','Medical':'#e8a6cf','Other':'#c2c7cf'};
+const CAT = {
+  'Credit card':      { key:'credit',   label:'Credit cards',      strong:'#3B82F6', fill:'#c4d9fc' },
+  'Store card':       { key:'store',    label:'Store cards',       strong:'#14B8A6', fill:'#b8ebe3' },
+  'Buy now pay later':{ key:'bnpl',     label:'Buy now pay later', strong:'#8B5CF6', fill:'#dccffd' },
+  'Auto loan':        { key:'auto',     label:'Auto loans',        strong:'#64748B', fill:'#d6dce4' },
+  'Student loan':     { key:'student',  label:'Student loans',     strong:'#22A55A', fill:'#c6ecd3' },
+  'Personal loan':    { key:'personal', label:'Personal loans',    strong:'#EC4899', fill:'#fbd0e6' },
+  'Medical':          { key:'medical',  label:'Medical',           strong:'#F43F5E', fill:'#fdd1d9' },
+  'Other':            { key:'other',    label:'Other',             strong:'#9CA3AF', fill:'#e2e4e8' },
+};
+const TYPE_HEX = Object.fromEntries(Object.entries(CAT).map(([k,v])=>[k,v.fill]));
+const TYPE_COLORS = TYPE_HEX;
 const TIERS = {conservative:{label:'Conservative',range:'4–6 mo',months:6},moderate:{label:'Moderate',range:'3–4 mo',months:4},aggressive:{label:'Aggressive',range:'1–3 mo',months:3}};
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MON = MONTHS.map(m=>m.slice(0,3));
@@ -77,6 +87,10 @@ function normalize(d){
   const b = blank();
   return { ...b, ...d, settings:{ ...b.settings, ...(d.settings||{}) }, flags:{ ...b.flags, ...(d.flags||{}) } };
 }
+const UIKEY = 'debt-killer:ui';
+let UI = (() => { try { return JSON.parse(localStorage.getItem(UIKEY)) || {}; } catch { return {}; } })();
+UI.open = UI.open || {}; UI.expanded = UI.expanded || {};
+function saveUI(){ try { localStorage.setItem(UIKEY, JSON.stringify(UI)); } catch {} }
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
 
 // ---------- payoff engine ----------
@@ -164,7 +178,7 @@ function render(){
   document.querySelectorAll('[data-tab]').forEach(b => b.dataset.tab === tab ? b.setAttribute('aria-current','page') : b.removeAttribute('aria-current'));
   const m = $('#main');
   const empty = !S.accounts.length;
-  m.innerHTML = `<div class="view">${empty ? viewEmpty() : tab==='accounts' ? viewAccounts() : tab==='progress' ? viewProgress() : viewHome()}</div>`;
+  m.innerHTML = `<div class="view">${empty ? viewEmpty() : tab==='accounts' ? viewAccounts() : tab==='calendar' ? viewCalendar() : tab==='progress' ? viewProgress() : viewHome()}</div>`;
   updateFab();
   bindView();
 }
@@ -223,7 +237,7 @@ function viewHome(){
       <div class="micro">Next · ${esc(next.name)}</div>
       <div class="mid">${money2(next.balance)} left to pay</div>
       <div class="bar"><i style="width:${next.start? (1-next.balance/next.start)*100:0}%"></i></div>
-      <div class="row between" style="margin-top:12px"><span class="muted">${next.dueDay?`Due the ${ordinal(next.dueDay)}`:'No due date'}</span>
+      <div class="row between" style="margin-top:12px"><span class="muted">${next.dueDay?dueChip(next):'No due date'}</span>
       <button class="btn primary sm" data-act="log" data-id="${next.id}">Pay ${money2(sim.firstPay[next.id]||next.min)} now</button></div>
     </section>` : ''}
     <section class="card glass">
@@ -264,13 +278,187 @@ function acctCard(a, sim){
 function nextDue(day){ const n = new Date(); let d = new Date(n.getFullYear(), n.getMonth(), Math.min(day, dim(n.getFullYear(),n.getMonth()))); if (d < new Date(n.getFullYear(),n.getMonth(),n.getDate())) d = new Date(n.getFullYear(), n.getMonth()+1, Math.min(day, dim(n.getFullYear(),n.getMonth()+1))); return d; }
 function dim(y,m){ return new Date(y,m+1,0).getDate(); }
 
+// ---------- due-date urgency ----------
+// Rule: for each account with a due day, this month's due date is "covered" if a payment was
+// logged in the 30 days before it or any time after. If this month's due date has passed,
+// isn't covered, and falls on/after the day the account was added, it's Overdue.
+// If it's today and not covered, it's Due today. Otherwise we count days to the next due date.
+const DAY = 864e5;
+const midnight = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const dueOn = (y, m, day) => new Date(y, m, Math.min(day, dim(y, m)));
+function covered(a, d){ const from = +d - 30*DAY; return S.payments.some(p => p.accountId === a.id && +new Date(p.date+'T00:00') >= from); }
+function dueInfo(a){
+  if (!a.dueDay || a.balance <= 0.004) return null;
+  const t = midnight(new Date()); const cur = dueOn(t.getFullYear(), t.getMonth(), a.dueDay);
+  const created = a.created ? new Date(a.created+'T00:00') : new Date(0);
+  if (+cur < +t && +cur >= +created && !covered(a, cur)) return { level:'overdue', date:cur, days:Math.round((cur-t)/DAY), text:`Overdue · ${cur.toLocaleDateString('en-US',{month:'short',day:'numeric'})}` };
+  if (+cur === +t && !covered(a, cur)) return { level:'today', date:cur, days:0, text:'Due today' };
+  const next = +cur > +t ? cur : dueOn(t.getFullYear(), t.getMonth()+1, a.dueDay);
+  const days = Math.round((next - t)/DAY);
+  const level = days <= 3 ? 'soon' : days <= 7 ? 'week' : 'later';
+  const text = days <= 7 ? (days === 1 ? 'Due tomorrow' : `Due in ${plural(days,'day')}`) : `Due ${next.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
+  return { level, date:next, days, text };
+}
+const dueIcon = { overdue:'⚠︎ ', today:'● ', soon:'', week:'', later:'' };
+function dueChip(a){ const d = dueInfo(a); return d ? `<span class="due due-${d.level}">${dueIcon[d.level]}${esc(d.text)}</span>` : ''; }
+const URGENCY_ORDER = { overdue:0, today:1, soon:2, week:3, later:4 };
+
+// ---------- pace ----------
+const PACE_ICON = { aggressive:'<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13.5 1.5s1 3.5-1.5 6.5-5 4.5-5 8.5A6 6 0 0 0 19 17c0-3-1.5-5-2.5-6 0 2-1 3-2 3 1.5-4 .5-9-1-12.5z"/></svg>',
+  moderate:'<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 15h4l3-9 3 12 2-6h4v2h-2.6l-3.4 10-3-12-2 5H4z"/></svg>',
+  conservative:'<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3c5 0 8 3.5 8 8 0 5-4 8-8 10-4-2-8-5-8-10 0-4.5 3-8 8-8z" opacity=".9"/></svg>' };
+function paceTag(a){ if (a.balance<=0.004) return `<span class="pace pace-done">✓ Paid off</span>`; return a.tier ? `<span class="pace pace-${a.tier}">${PACE_ICON[a.tier]}${TIERS[a.tier].label}</span>` : `<span class="pace pace-none">Snowball</span>`; }
+function miniRing(pct, color){ const R=11, C=2*Math.PI*R, p=Math.max(0,Math.min(1,pct)); return `<svg class="mini-ring" width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="${R}" fill="none" stroke="var(--fill2)" stroke-width="4"/><circle cx="14" cy="14" r="${R}" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${C*p} ${C}" transform="rotate(-90 14 14)"/></svg>`; }
+
+// ---------- Accounts: App Library-style folders ----------
+function tile(a, rank, sim){
+  const done = a.balance <= 0.004; const pct = a.start ? 1 - a.balance/a.start : 1;
+  const d = dueInfo(a);
+  const label = `${a.name}. ${done?'Paid off':money2(a.balance)+' left'}. ${done?'':'Snowball number '+rank+'. '}${a.tier?TIERS[a.tier].label+' pace':'Snowball pace'}. ${d?d.text:'No due date'}.`;
+  return `<button class="acct tile glass ${a.tier&&!done?'t-'+a.tier:''} ${done?'t-done':''}" data-act="detail" data-id="${a.id}" aria-label="${esc(label)}">
+    <div class="tile-top">${avatar(a,36,13)}<span style="flex:1"></span>${miniRing(pct, done?'var(--green-bar)':CAT[a.type].strong)}${done?'<span class="rank rank-done" aria-hidden="true">✓</span>':`<span class="rank" aria-hidden="true">#${rank}</span>`}</div>
+    <div class="name">${esc(a.name)}</div>
+    <div class="tile-bal">${done?money(a.start):money2(a.balance)}</div>
+    <div class="tile-meta">${paceTag(a)}${dueChip(a)}</div>
+  </button>`;
+}
+function stackTile(list, catKey){
+  return `<button class="tile stack glass" data-act="expandCat" data-cat="${catKey}" aria-label="Show ${plural(list.length,'more account')}: ${esc(list.map(a=>a.name).join(', '))}">
+    <div class="stack-grid">${list.slice(0,4).map(a=>avatar(a,30,11)).join('')}</div><div class="stack-n">+${list.length}</div><div class="small">Show all</div></button>`;
+}
+function folder({ key, title, list, sim, ranks, color, total, defaultOpen }){
+  const open = UI.open[key] ?? defaultOpen; const exp = !!UI.expanded[key];
+  let tiles;
+  if (list.length > 4 && !exp) tiles = list.slice(0,3).map(a=>tile(a,ranks[a.id],sim)).join('') + stackTile(list.slice(3), key);
+  else tiles = list.map(a=>tile(a,ranks[a.id],sim)).join('') + (list.length>4 ? `<button class="tile less glass" data-act="expandCat" data-cat="${key}">Show less</button>` : '');
+  return `<section class="folder glass ${exp?'expanded':''}" style="--cat:${color}">
+    <h3 class="folder-h"><button class="folder-btn" aria-expanded="${open}" aria-controls="fb-${key}" data-act="toggleCat" data-cat="${key}">
+      <span class="cat-dot" aria-hidden="true"></span><span class="folder-title">${esc(title)}</span>
+      <span class="folder-count">${list.length}</span><span class="folder-total">${money(total)}</span>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></h3>
+    <div class="folder-body" id="fb-${key}" ${open?'':'hidden'}><div class="tiles">${tiles}</div></div></section>`;
+}
+function legendHTML(){
+  return `<details class="legend-box"><summary>What the colors mean</summary><div class="legend-grid">
+    <div><div class="micro">Due dates</div><div class="chips-col"><span class="due due-overdue">⚠︎ Overdue</span><span class="due due-today">● Due today</span><span class="due due-soon">Due in 1–3 days</span><span class="due due-week">Due in 4–7 days</span><span class="due due-later">Later</span></div>
+    <p class="small">Overdue means this month’s due date has passed with no payment logged in the 30 days before it (or since). Due dates before you added the account don’t count.</p></div>
+    <div><div class="micro">Pace</div><div class="chips-col">${['aggressive','moderate','conservative'].map(k=>`<span class="pace pace-${k}">${PACE_ICON[k]}${TIERS[k].label}</span>`).join('')}<span class="pace pace-none">Snowball (no tint)</span></div></div>
+    <div><div class="micro">Categories</div><div class="chips-col">${Object.values(CAT).map(c=>`<span class="cat-chip" style="--cat:${c.strong}"><i></i>${c.label}</span>`).join('')}</div></div>
+  </div></details>`;
+}
 function viewAccounts(){
-  const sim = simulate(S.accounts); const open = openAccounts();
-  return `<h1 class="large-title">Accounts</h1><p class="subtitle">${plural(S.accounts.length,'account')} · ${money(totals().left)} left</p>
+  const sim = simulate(S.accounts); const open = openAccounts(); const done = S.accounts.filter(a=>a.balance<=0.004);
+  const ranks = {}; open.forEach((a,i)=>ranks[a.id]=i+1);
+  const dues = open.map(a=>({a,d:dueInfo(a)})).filter(x=>x.d).sort((x,y)=>URGENCY_ORDER[x.d.level]-URGENCY_ORDER[y.d.level] || x.d.date-y.d.date);
+  const nd = dues[0];
+  const defOpen = S.accounts.length <= 8 || true;
+  const folders = TYPES.map(t => ({ t, list: open.filter(a=>a.type===t) })).filter(f=>f.list.length).map(f => folder({ key:CAT[f.t].key, title:CAT[f.t].label, list:f.list, sim, ranks, color:CAT[f.t].strong, total:f.list.reduce((s,a)=>s+a.balance,0), defaultOpen:defOpen })).join('');
+  return `<h1 class="large-title">Accounts</h1>
+  <div class="summary-row glass"><div><span class="micro">Total owed</span><b>${money2(totals().left)}</b></div><div><span class="micro">Accounts</span><b>${open.length} open${done.length?` · ${done.length} paid`:''}</b></div>
+    <div><span class="micro">Next due</span><b>${nd?esc(nd.a.name):'—'}</b>${nd?`<span class="due due-${nd.d.level}">${dueIcon[nd.d.level]}${esc(nd.d.text)}</span>`:''}</div></div>
   <div class="toolbar"><button class="btn sm" data-act="check">Check my balances</button><button class="btn sm" data-act="calAll">Add reminders to Google Calendar</button><button class="btn sm primary" data-act="add">Add account</button></div>
   <div class="section-head"><h2>Snowball order</h2><span class="muted">${open.length?plural(open.length,'account')+' to go':'All done'}</span></div>
-  <p class="tip">${icon.info}<span>Why smallest first? Each paid-off debt is a quick win, and its payment rolls into the next one.</span></p>
-  <div class="grid acct-grid">${orderAll().map(a=>acctCard(a,sim)).join('')}</div>`;
+  <p class="tip">${icon.info}<span>Why smallest first? Each paid-off debt is a quick win, and its payment rolls into the next one. The #1, #2… badges show the order.</span></p>
+  ${legendHTML()}
+  <div class="folders">${folders}${done.length?folder({ key:'paidoff', title:'Paid off', list:done, sim, ranks, color:'var(--green-bar)', total:done.reduce((s,a)=>s+a.start,0), defaultOpen:false }):''}</div>`;
+}
+
+// ---------- Calendar ----------
+let calMonth = (() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); })();
+function duesInMonth(y, m){
+  const map = {};
+  openAccounts().forEach(a => { if (!a.dueDay) return; const d = dueOn(y, m, a.dueDay).getDate(); (map[d] = map[d] || []).push(a); });
+  return map;
+}
+function viewCalendar(){
+  const y = calMonth.getFullYear(), m = calMonth.getMonth(); const t = midnight(new Date());
+  const map = duesInMonth(y, m); const first = new Date(y, m, 1).getDay(); const days = dim(y, m);
+  const sim = simulate(S.accounts);
+  let cells = '';
+  for (let i=0;i<first;i++) cells += '<div class="cal-cell blank" aria-hidden="true"></div>';
+  for (let d=1; d<=days; d++){
+    const date = new Date(y, m, d); const list = map[d] || []; const isToday = +date === +t;
+    const urg = list.map(a=>dueInfo(a)).filter(x=>x && +x.date===+date || (x && x.level==='overdue' && +x.date===+date));
+    const lvl = urg.some(x=>x.level==='overdue') ? 'overdue' : urg.some(x=>x.level==='today') ? 'today' : '';
+    const label = `${MONTHS[m]} ${d}${isToday?', today':''}${list.length?`, ${plural(list.length,'payment')} due: ${list.map(a=>a.name).join(', ')}`:''}${lvl==='overdue'?', overdue':lvl==='today'?', due today':''}`;
+    const inner = `<span class="cal-num">${d}</span>${lvl?`<span class="cal-flag flag-${lvl}" aria-hidden="true">${lvl==='overdue'?'!':'•'}</span>`:''}
+      <span class="cal-dots" aria-hidden="true">${list.slice(0,4).map(a=>`<i style="background:${CAT[a.type].strong}"></i>`).join('')}</span>
+      <span class="cal-pills" aria-hidden="true">${list.slice(0,3).map(a=>`<span class="cal-pill" style="--cat:${CAT[a.type].strong}">${avatar(a,16,8)}<span>${esc(a.name)}</span></span>`).join('')}${list.length>3?`<span class="small">+${list.length-3} more</span>`:''}</span>`;
+    cells += list.length ? `<button class="cal-cell has ${isToday?'today':''} ${lvl?'u-'+lvl:''}" data-act="calDay" data-day="${d}" aria-label="${esc(label)}">${inner}</button>` : `<div class="cal-cell ${isToday?'today':''}" aria-label="${esc(label)}" role="gridcell">${inner}</div>`;
+  }
+  // upcoming 7 days (plus overdue)
+  const up = openAccounts().map(a=>({a,d:dueInfo(a)})).filter(x=>x.d && (x.d.level!=='later')).sort((x,y)=>URGENCY_ORDER[x.d.level]-URGENCY_ORDER[y.d.level]||x.d.date-y.d.date);
+  const cats = [...new Set(openAccounts().filter(a=>a.dueDay).map(a=>a.type))];
+  return `<h1 class="large-title">Calendar</h1><p class="subtitle">Due dates for your open accounts</p>
+  <section class="card glass cal">
+    <div class="cal-head"><h2 class="mid" style="margin:0" aria-live="polite">${MONTHS[m]} ${y}</h2>
+      <div class="row" style="gap:6px"><button class="icon-btn" data-act="calPrev" aria-label="Previous month">‹</button><button class="btn sm" data-act="calToday">Today</button><button class="icon-btn" data-act="calNext" aria-label="Next month">›</button></div></div>
+    <div class="cal-grid cal-dow" aria-hidden="true">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(x=>`<div>${x}</div>`).join('')}</div>
+    <div class="cal-grid" role="grid" aria-label="${MONTHS[m]} ${y}">${cells}</div>
+    <div class="legend" style="margin-top:12px">${cats.map(c=>`<span class="cat-chip" style="--cat:${CAT[c].strong}"><i></i>${CAT[c].label}</span>`).join('')}<span><span class="cal-flag flag-today static">•</span> Due today</span><span><span class="cal-flag flag-overdue static">!</span> Overdue</span></div>
+  </section>
+  <section class="card glass" style="margin-top:14px"><h2 class="micro">Upcoming · next 7 days</h2>
+    ${up.length?`<ul class="list" style="margin-top:6px">${up.map(({a,d})=>`<li>${avatar(a,34,12)}<span style="flex:1;min-width:0"><b>${esc(a.name)}</b><br><span class="small">${money2(sim.firstPay[a.id]||a.min)} · ${a.tier?TIERS[a.tier].label:'Snowball'} pace</span></span><span class="due due-${d.level}">${dueIcon[d.level]}${esc(d.text)}</span></li>`).join('')}</ul>`:'<p class="muted">Nothing due in the next 7 days.</p>'}
+  </section>`;
+}
+function openDay(day, trigger){
+  const y = calMonth.getFullYear(), m = calMonth.getMonth(); const list = duesInMonth(y,m)[day] || []; const sim = simulate(S.accounts);
+  const body = `<ul class="list">${list.map(a=>`<li>${avatar(a,40,14)}<span style="flex:1;min-width:0"><b>${esc(a.name)}</b><br><span class="small">${esc(CAT[a.type].label)} · ${money2(a.balance)} left</span><br>${paceTag(a)} ${dueChip(a)}</span>
+    <span style="text-align:right"><b>${money2(sim.firstPay[a.id]||a.min)}</b><br><span class="small">${sim.firstPay[a.id]>a.min+0.004?'plan':'minimum'}</span><br><button class="btn sm primary" data-log="${a.id}" style="margin-top:6px">Log payment</button></span></li>`).join('')}</ul>
+    <div class="form-actions"><button class="btn" data-close>Close</button></div>`;
+  openDialog({ title:`${MONTHS[m]} ${day}`, body, trigger, onMount: sh => {
+    sh.querySelector('.form-actions [data-close]').addEventListener('click', closeTop);
+    sh.querySelectorAll('[data-log]').forEach(b => b.addEventListener('click', e => openLog(S.accounts.find(x=>x.id===b.dataset.log), e.currentTarget)));
+  }});
+}
+function bindExtra(m){
+  m.querySelectorAll('[data-act=toggleCat]').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.cat; const now = b.getAttribute('aria-expanded') !== 'true'; UI.open[k] = now; saveUI();
+    b.setAttribute('aria-expanded', String(now)); document.getElementById('fb-'+k).hidden = !now; }));
+  m.querySelectorAll('[data-act=expandCat]').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.cat; UI.expanded[k] = !UI.expanded[k]; saveUI(); render();
+    const tgt = UI.expanded[k] ? document.querySelector(`#fb-${k} .tile:nth-child(4)`) : document.querySelector(`#fb-${k} .stack`); tgt && tgt.focus(); }));
+  m.querySelectorAll('[data-act=calPrev],[data-act=calNext],[data-act=calToday]').forEach(b => b.addEventListener('click', () => {
+    const a = b.dataset.act; const n = new Date();
+    calMonth = a==='calToday' ? new Date(n.getFullYear(), n.getMonth(), 1) : addMonths(calMonth, a==='calPrev'?-1:1);
+    render(); document.querySelector(`[data-act=${a}]`)?.focus(); }));
+  m.querySelectorAll('[data-act=calDay]').forEach(b => b.addEventListener('click', () => openDay(+b.dataset.day, b)));
+}
+
+// ---------- Payoff celebration ----------
+function celebrate(acc, prevPlan){
+  if (acc.celebrated) return; acc.celebrated = true; save();
+  const next = openAccounts()[0];
+  const roll = prevPlan || acc.min;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  try { if (!reduced && navigator.vibrate) navigator.vibrate([30,40,60]); } catch {}
+  const colors = ['#d97757','#f2a93b','#e8c39e','#7aa7e8', CAT[acc.type].strong, '#9fd3b4','#c86b4a'];
+  const confetti = reduced ? '' : Array.from({length:26},(_,i)=>{ const c = colors[i%colors.length]; const x = 40 + (i*37)%240, dx = ((i*53)%120)-60, r = (i*47)%360, sh = i%3;
+    const shape = sh===0 ? `<rect width="9" height="9" rx="2" fill="${c}"/>` : sh===1 ? `<circle r="5" cx="4" cy="4" fill="${c}"/>` : `<path d="M0 8 L5 0 L10 8z" fill="${c}"/>`;
+    return `<g class="conf" style="--x:${x}px;--dx:${dx}px;--r:${r}deg;--d:${(i%7)*0.08}s">${shape}</g>`; }).join('');
+  const art = `<svg class="cel-art ${reduced?'still':''}" viewBox="0 0 320 220" role="img" aria-label="Illustration: a sun rising behind a cracked card that bursts into confetti">
+    <defs><radialGradient id="sunG" cx="50%" cy="100%" r="70%"><stop offset="0" stop-color="#f6c58f"/><stop offset="1" stop-color="#f6c58f" stop-opacity="0"/></radialGradient></defs>
+    <rect x="0" y="0" width="320" height="220" rx="24" fill="#f7efe4"/>
+    <circle class="glow" cx="160" cy="190" r="150" fill="url(#sunG)"/>
+    <g class="rays" stroke="#d97757" stroke-width="3" stroke-linecap="round" fill="none">
+      ${Array.from({length:9},(_,i)=>{ const ang = Math.PI*(0.1+0.8*i/8); const x1=160-Math.cos(ang)*78, y1=172-Math.sin(ang)*78, x2=160-Math.cos(ang)*104, y2=172-Math.sin(ang)*104; return `<path class="draw" style="--d:${0.3+i*0.05}s" d="M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)}"/>`; }).join('')}</g>
+    <path class="sun" d="M92 172 a68 68 0 0 1 136 0z" fill="#e9a26f" stroke="#c86b4a" stroke-width="3" stroke-linejoin="round"/>
+    <path class="draw" style="--d:.1s" d="M24 174 C 80 168, 120 178, 160 172 S 260 168, 296 175" fill="none" stroke="#7a4a32" stroke-width="3" stroke-linecap="round"/>
+    <g class="card-l"><path d="M112 96 h44 l-8 22 l10 16 l-8 22 h-38 a10 10 0 0 1 -10 -10 v-40 a10 10 0 0 1 10 -10z" fill="#fffaf3" stroke="#7a4a32" stroke-width="3" stroke-linejoin="round"/><rect x="112" y="110" width="30" height="8" rx="3" fill="#e8c39e"/></g>
+    <g class="card-r"><path d="M156 96 h52 a10 10 0 0 1 10 10 v40 a10 10 0 0 1 -10 10 h-58 l8 -22 l-10 -16z" fill="#fffaf3" stroke="#7a4a32" stroke-width="3" stroke-linejoin="round"/><rect x="176" y="136" width="30" height="7" rx="3" fill="#e8c39e"/></g>
+    <path class="check draw" style="--d:1.1s" d="M136 128 l16 16 l34 -36" fill="none" stroke="#2f9e5e" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <g transform="translate(0,40)">${confetti}</g>
+  </svg>`;
+  const nextLine = next ? `Its ${money2(roll)} payment now rolls into ${esc(next.name)}.` : 'That was the last one. You’re debt free!';
+  openDialog({ title:'Knocked out!', trigger: document.activeElement, body:`<div class="cel">${art}
+    <h3 class="cel-title">${esc(acc.name)} is paid off!</h3>
+    <p class="cel-sub">That’s ${money2(acc.start)} gone. ${nextLine}</p>
+    <div class="form-actions"><button class="btn" id="celShare">Share</button><button class="btn primary" data-close>Keep going</button></div></div>`,
+    onMount: sh => { sh.classList.add('cel-sheet');
+      sh.querySelector('.form-actions [data-close]').addEventListener('click', closeTop);
+      sh.querySelector('#celShare').addEventListener('click', async () => { const txt = `I just paid off ${acc.name} — ${money2(acc.start)} gone! #DebtKiller`;
+        try { if (navigator.share) await navigator.share({ text: txt }); else { await navigator.clipboard.writeText(txt); toast('Copied to share'); } } catch {} });
+      setTimeout(() => sh.querySelector('.form-actions .primary').focus(), 60); } });
 }
 
 // ---------- charts (self-written SVG, Monarch-style) ----------
@@ -396,6 +584,7 @@ function viewProgress(){
 
 function bindView(){
   const m = $('#main');
+  bindExtra(m);
   m.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', e => act(b.dataset.act, b, e)));
   m.querySelectorAll('[data-extra]').forEach(b => b.addEventListener('click', () => { simExtra = +b.dataset.extra; $('#simIn').value = simExtra||''; refreshSim(); }));
   const si = $('#simIn'); if (si){ si.addEventListener('input', () => { simExtra = Math.max(0, parseFloat(si.value.replace(/[^0-9.]/g,''))||0); refreshSim(); }); refreshSim(); }
@@ -538,7 +727,7 @@ function openDetail(acc, trigger){
       <div class="stats">
         <div class="stat"><b>${money2(a.balance)}</b><span>Left to pay</span></div><div class="stat"><b>${money2(paid)}</b><span>Paid so far</span></div>
         <div class="stat"><b>${money2(a.min)}</b><span>Minimum</span></div><div class="stat"><b>${sim.payoff[a.id]?fmtMonth(sim.payoff[a.id]):a.balance<=0.004?'Paid off':'—'}</b><span>Expected payoff</span></div>
-        <div class="stat"><b>${a.dueDay?ordinal(a.dueDay):'—'}</b><span>Due each month</span></div><div class="stat"><b>${a.dueDay?nextDue(a.dueDay).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—'}</b><span>Next due</span></div>
+        <div class="stat"><b>${a.dueDay?ordinal(a.dueDay):'—'}</b><span>Due each month</span></div><div class="stat"><b>${a.dueDay?nextDue(a.dueDay).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—'}</b><span>Next due</span> ${dueChip(a)}</div>
         <div class="stat" style="grid-column:1/-1"><b>${a.apr?`${money2(sim.interest[a.id]||0)} at ${a.apr}% APR`:'No interest rate entered'}</b><span>Projected interest</span></div>
       </div>
       <h3 class="micro" style="margin:18px 0 8px">Payoff pace</h3>
@@ -576,11 +765,11 @@ function openLog(acc, trigger){
       const ed = !/^\d{4}-\d{2}-\d{2}$/.test(date) ? 'Pick a date.' : null;
       setErr(f,'p_amt',ea); setErr(f,'p_date',ed);
       if (ea){ f.p_amt.focus(); return; } if (ed){ f.p_date.focus(); return; }
-      acc.balance = r2(Math.max(0, acc.balance - amt));
+      const prevPlan = plan; acc.balance = r2(Math.max(0, acc.balance - amt));
       S.payments.push({ id:uid(), accountId:acc.id, amount:r2(amt), date });
       noteChange('logging a payment');
       closeAll(); render();
-      toast(acc.balance <= 0.004 ? `${money2(amt)} logged — ${acc.name} knocked out! 🎉` : `${money2(amt)} logged`);
+      if (acc.balance <= 0.004) celebrate(acc, prevPlan); else toast(`${money2(amt)} logged`);
     });
   }});
 }
@@ -595,8 +784,9 @@ function openCheck(trigger){
     f.addEventListener('submit', e => { e.preventDefault(); let bad = null;
       list.forEach(a => { const v = num(f['c_'+a.id].value); const er = (v===null||isNaN(v)||v<0) ? 'Enter $0 or more.' : null; setErr(f,'c_'+a.id,er); if (er && !bad) bad = 'c_'+a.id; });
       if (bad){ f.querySelector('#'+bad).focus(); return; }
-      list.forEach(a => { a.balance = r2(num(f['c_'+a.id].value)); if (a.balance > a.start) a.start = a.balance; });
-      noteChange('checking balances'); closeAll(); render(); toast('Balances updated'); });
+      const plans = simulate(S.accounts).firstPay; const zeroed = [];
+      list.forEach(a => { a.balance = r2(num(f['c_'+a.id].value)); if (a.balance > a.start) a.start = a.balance; if (a.balance <= 0.004) zeroed.push(a); });
+      noteChange('checking balances'); closeAll(); render(); toast('Balances updated'); if (zeroed[0]) celebrate(zeroed[0], plans[zeroed[0].id]); });
   }});
 }
 
@@ -684,7 +874,7 @@ function openSettings(trigger){
     sh.querySelector('#impFile').addEventListener('change', e => { const file = e.target.files[0]; if (file) importFile(file, sh.querySelector('#impJ')); e.target.value = ''; });
     sh.querySelector('#eraseBtn').addEventListener('click', e => confirmDialog({ title:'Are you sure?', trigger:e.currentTarget, text:'This deletes all accounts and payments on this device. This can’t be undone.', ok:'Erase everything',
       extra:'<p class="small" style="margin:0 0 12px">Want a copy first? <button type="button" class="link-btn" id="expFirst">Export a backup</button></p>',
-      onOk:() => { localStorage.removeItem(KEY); S = blank(); simExtra = 0; tab = 'home'; closeAll(); render(); toast('Everything erased'); } }));
+      onOk:() => { localStorage.removeItem(KEY); localStorage.removeItem(UIKEY); UI = {open:{},expanded:{}}; S = blank(); simExtra = 0; tab = 'home'; closeAll(); render(); toast('Everything erased'); } }));
   }});
   // revert unsaved theme preview if closed without saving
   const entry = stack[stack.length-1]; const sheet = entry.el.querySelector('.sheet');
