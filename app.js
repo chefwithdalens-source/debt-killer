@@ -518,7 +518,7 @@ function openExtraFor(acc, trigger){
 
 // ---------- Anubis strike: quick GIF-style clip on a logged payment (non-blocking) ----------
 function anubisStrike(amount){
-  if (S.settings.strike === false) return;
+  if (S.settings.strike === false) return 0;
   document.querySelector('.strike')?.remove();
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const el = document.createElement('div'); el.className = 'strike glass' + (reduced ? ' still' : ''); el.setAttribute('role','status'); el.setAttribute('aria-live','polite');
@@ -529,6 +529,7 @@ function anubisStrike(amount){
   document.body.appendChild(el);
   setTimeout(() => el.classList.add('out'), reduced ? 1400 : 1150);
   setTimeout(() => el.remove(), reduced ? 1700 : 1450);
+  return reduced ? 1700 : 1450;
 }
 
 // ---------- Payoff celebration ----------
@@ -889,7 +890,8 @@ function openLog(acc, trigger){
       S.payments.push({ id:uid(), accountId:acc.id, amount:r2(amt), date });
       noteChange('logging a payment');
       closeAll(); render();
-      if (acc.balance <= 0.004) celebrate(acc, prevPlan); else { toast(`${money2(amt)} logged`); anubisStrike(amt); }
+      const wait = anubisStrike(amt);
+      if (acc.balance <= 0.004) setTimeout(() => celebrate(acc, prevPlan), wait); else toast(`${money2(amt)} logged`);
     });
   }});
 }
