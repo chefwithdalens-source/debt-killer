@@ -24,6 +24,30 @@ const fmtMonth = d => `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 const fmtMonShort = d => `${MON[d.getMonth()]} ${d.getFullYear()}`;
 const debtFree = d => d ? `Debt free by ${fmtMonth(d)}` : 'Debt free date unknown';
 const ordinal = n => n + (n%100>=11&&n%100<=13 ? 'th' : ({1:'st',2:'nd',3:'rd'}[n%10] || 'th'));
+const LOGOS = [
+  [/navy\s*federal|\bnfcu\b/i,'navy-federal.png','Navy Federal'],
+  [/\baffirm\b/i,'affirm.png','Affirm'],
+  [/\bklarna\b/i,'klarna.svg','Klarna'],
+  [/after\s*pay/i,'afterpay.svg','Afterpay'],
+  [/capital\s*one/i,'capital-one.png','Capital One'],
+  [/mission\s*lane/i,'mission-lane.png','Mission Lane'],
+  [/synchrony/i,'synchrony.png','Synchrony'],
+  [/apple\s*card/i,'apple-card.svg','Apple Card'],
+  [/\bchase\b/i,'chase.svg','Chase'],
+  [/\bciti(bank)?\b/i,'citi.svg','Citi'],
+  [/\bdiscover\b/i,'discover.svg','Discover'],
+  [/wells\s*fargo/i,'wells-fargo.svg','Wells Fargo'],
+  [/bank\s*of\s*america|\bbofa\b/i,'bank-of-america.svg','Bank of America'],
+  [/best\s*buy/i,'best-buy.svg','Best Buy'],
+  [/\btarget\b/i,'target.svg','Target'],
+  [/\bamex\b|american\s*express/i,'american-express.svg','American Express'],
+];
+const logoFor = name => { for (const [re,f] of LOGOS) if (re.test(name||'')) return f; return null; };
+function avatar(a, size=44, font=15){
+  const f = logoFor(a.name);
+  if (f) return `<span class="avatar logo-tile" style="width:${size}px;height:${size}px"><img src="logos/${f}" alt="" width="${Math.round(size*.7)}" height="${Math.round(size*.7)}" loading="lazy" onerror="this.parentNode.classList.remove('logo-tile');this.parentNode.style.background='${TYPE_HEX[a.type]}';this.replaceWith(document.createTextNode('${initials(a.name).replace(/'/g,'')}'))"></span>`;
+  return `<span class="avatar" style="width:${size}px;height:${size}px;font-size:${font}px;background:${TYPE_HEX[a.type]}">${esc(initials(a.name))}</span>`;
+}
 const initials = n => n.trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase() || '?';
 const monthsBetween = (a, b) => (b.getFullYear()-a.getFullYear())*12 + b.getMonth()-a.getMonth();
 
@@ -35,7 +59,7 @@ function detectType(name){
     [/navient|sallie|nelnet|mohela|student|fedloan/, 'Student loan'],
     [/\bauto\b|toyota|ford|tesla|honda|car\b|car loan|vehicle|ally/, 'Auto loan'],
     [/hospital|medical|clinic|dental|health/, 'Medical'],
-    [/visa|mastercard|amex|american express|chase|capital one|platinum|discover|citi|card/, 'Credit card'],
+    [/visa|mastercard|amex|american express|chase|capital one|platinum|discover|citi|navy federal|mission lane|credit one|card/, 'Credit card'],
     [/personal loan|sofi|lending|upstart|loan/, 'Personal loan'],
   ];
   for (const [re, t] of rules) if (re.test(n)) return t;
@@ -229,7 +253,7 @@ function acctCard(a, sim){
   const done = a.balance <= 0.004; const pct = a.start ? (1 - a.balance/a.start) : 0;
   const pay = sim.firstPay[a.id];
   return `<button class="acct card glass ${done?'done':''}" data-act="detail" data-id="${a.id}" aria-label="${esc(a.name)}, ${done?'paid off':money2(a.balance)+' left'}">
-    <div class="row"><span class="avatar" style="background:${TYPE_HEX[a.type]}">${esc(initials(a.name))}</span>
+    <div class="row">${avatar(a)}
       <div style="flex:1;min-width:0"><div class="name">${esc(a.name)}</div>
       <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:4px"><span class="pill">${done?'Knocked out':paceLabel(a)}</span><span class="pill type" style="--tc:${TYPE_COLORS[a.type]}">${esc(a.type)}</span>${a.dueDay?`<span class="pill">Due ${nextDue(a.dueDay).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>`:''}</div></div></div>
     <div class="mid" style="margin-top:12px">${done?'Paid off':money2(a.balance)+' left'}</div>
@@ -260,7 +284,7 @@ function monotonePath(pts){
   for (let i=0;i<n-1;i++){ const h=dx[i]/3; d += ` C${pts[i][0]+h},${pts[i][1]+h*t[i]} ${pts[i+1][0]-h},${pts[i+1][1]-h*t[i+1]} ${pts[i+1][0]},${pts[i+1][1]}`; }
   return d;
 }
-function niceMax(v){ if (v<=0) return 100; const p = Math.pow(10, Math.floor(Math.log10(v))); const f = v/p; return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*p; }
+function niceMax(v){ if (v<=0) return 100; const p = Math.pow(10, Math.floor(Math.log10(v))); const f = v/p; return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:f<=8?8:10)*p; }
 const tick$ = v => v>=1000 ? '$'+(v/1000).toFixed(v%1000?1:0)+'k' : '$'+Math.round(v);
 
 function actualSeries(accts){
@@ -287,7 +311,7 @@ function lineChart(accts, id){
   const t0 = Math.min(...all.map(p=>+p.date)), t1 = Math.max(...all.map(p=>+p.date), t0+864e5*30);
   const ymax = niceMax(Math.max(...all.map(p=>p.total)));
   const x = d => L + (d - t0)/(t1 - t0)*(W-L-R), y = v => T + (1 - v/ymax)*(H-T-B);
-  const lead = ymax/Math.pow(10,Math.floor(Math.log10(ymax))); const nst = lead===2?4:5; const grid = Array.from({length:nst+1},(_,i)=>i/nst).map(f=>`<line x1="${L}" x2="${W-R}" y1="${y(ymax*f)}" y2="${y(ymax*f)}" stroke="var(--hair)"/><text x="${L-8}" y="${y(ymax*f)+4}" text-anchor="end">${tick$(ymax*f)}</text>`).join('');
+  const lead = ymax/Math.pow(10,Math.floor(Math.log10(ymax))); const nst = (lead===2||lead===8)?4:5; const grid = Array.from({length:nst+1},(_,i)=>i/nst).map(f=>`<line x1="${L}" x2="${W-R}" y1="${y(ymax*f)}" y2="${y(ymax*f)}" stroke="var(--hair)"/><text x="${L-8}" y="${y(ymax*f)+4}" text-anchor="end">${tick$(ymax*f)}</text>`).join('');
   const span = monthsBetween(new Date(t0), new Date(t1)) || 1; const step = Math.max(1, Math.ceil(span/6));
   let xt=''; for (let i=0;i<=span;i+=step){ const d = addMonths(new Date(t0), i); if (+d < t0) continue; xt += `<text x="${x(+d)}" y="${H-10}" text-anchor="middle">${MON[d.getMonth()]}${d.getMonth()===0||i===0?" '"+String(d.getFullYear()).slice(2):''}</text>`; }
   const aP = act.map(p=>[x(+p.date),y(p.total)]), pP = proj.map(p=>[x(+p.date),y(p.total)]);
@@ -510,7 +534,7 @@ function openDetail(acc, trigger){
     const sim = simulate(S.accounts); const a = acc; const paid = Math.max(0, a.start - a.balance);
     const opts = Object.entries(TIERS).map(([k,t]) => { const amt = Math.max(a.min, Math.ceil(a.balance/t.months)); return `<button role="radio" aria-checked="${a.tier===k}" data-tier="${k}">${t.label}<small>${t.range} · ${money(amt)}/mo</small></button>`; }).join('');
     sh.querySelector('.sheet-body').innerHTML = `
-      <div class="row" style="margin-bottom:14px"><span class="avatar" style="width:56px;height:56px;font-size:18px;background:${TYPE_HEX[a.type]}">${esc(initials(a.name))}</span><div><span class="pill type" style="--tc:${TYPE_COLORS[a.type]}">${esc(a.type)}</span> <span class="pill">${a.balance<=0.004?'Knocked out':paceLabel(a)}</span></div></div>
+      <div class="row" style="margin-bottom:14px">${avatar(a,56,18)}<div><span class="pill type" style="--tc:${TYPE_COLORS[a.type]}">${esc(a.type)}</span> <span class="pill">${a.balance<=0.004?'Knocked out':paceLabel(a)}</span></div></div>
       <div class="stats">
         <div class="stat"><b>${money2(a.balance)}</b><span>Left to pay</span></div><div class="stat"><b>${money2(paid)}</b><span>Paid so far</span></div>
         <div class="stat"><b>${money2(a.min)}</b><span>Minimum</span></div><div class="stat"><b>${sim.payoff[a.id]?fmtMonth(sim.payoff[a.id]):a.balance<=0.004?'Paid off':'—'}</b><span>Expected payoff</span></div>

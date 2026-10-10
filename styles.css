@@ -183,3 +183,6 @@ button,.btn,.chip,.tab,.seg,.icon-btn,.close-x{min-height:44px}
 @media (min-width:700px){ .acct-grid{grid-template-columns:1fr 1fr} }
 @media (min-width:1200px){ .acct-grid{grid-template-columns:1fr 1fr 1fr} }
 .chart svg[width="220"]{width:220px;max-width:100%;flex:0 0 auto}
+.logo-tile{background:#fff!important;border:1px solid rgba(20,23,28,.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 1px 3px rgba(0,0,0,.08);overflow:hidden;border-radius:14px}
+.logo-tile img{object-fit:contain;display:block}
+[data-theme=dark] .logo-tile{border-color:rgba(255,255,255,.18)}
