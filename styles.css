@@ -401,3 +401,23 @@ main{padding:var(--sp-2) var(--sp-5) calc(var(--tabbar-h) + 72px + var(--sp-5) +
 main{padding-bottom:calc(110px + env(safe-area-inset-bottom))!important}
 .toast{bottom:calc(104px + env(safe-area-inset-bottom))}
 .brand{flex:1!important}
+/* ===== Polish: chips, folder layout, header glass ===== */
+.due,.pace{max-width:100%;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tile-meta{min-width:0;max-width:100%}
+.lbl-short{display:none}
+@media (max-width:520px){.lbl-full{display:none}.lbl-short{display:inline}}
+.toolbar{flex-wrap:wrap}
+@media (max-width:520px){.toolbar{display:grid;grid-template-columns:1fr 1fr}}
+/* masonry-like folder columns so small folders size to content */
+@media (min-width:700px){
+  .folders{display:block;columns:2;column-gap:var(--gap-folders)}
+  .folder{break-inside:avoid;margin-bottom:var(--gap-folders);display:block}
+  .folder.expanded{column-span:all}
+  .tiles.n1{grid-template-columns:1fr}
+  .tiles.n1 .tile{min-height:0}
+}
+@media (min-width:1200px){.folders{columns:3}}
+/* header glass: more opaque so text behind is not legible */
+.topbar{background:rgba(250,249,246,.9)}
+[data-theme=dark] .topbar{background:rgba(18,20,26,.9)}
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.topbar{backdrop-filter:saturate(180%) blur(30px);-webkit-backdrop-filter:saturate(180%) blur(30px)}}

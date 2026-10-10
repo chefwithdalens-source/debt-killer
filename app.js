@@ -293,7 +293,7 @@ function dueInfo(a){
   if (!a.dueDay || a.balance <= 0.004) return null;
   const t = midnight(new Date()); const cur = dueOn(t.getFullYear(), t.getMonth(), a.dueDay);
   const created = a.created ? new Date(a.created+'T00:00') : new Date(0);
-  if (+cur < +t && +cur >= +created && !covered(a, cur)) return { level:'overdue', date:cur, days:Math.round((cur-t)/DAY), text:`Overdue · ${cur.toLocaleDateString('en-US',{month:'short',day:'numeric'})}` };
+  if (+cur < +t && +cur >= +created && !covered(a, cur)) return { level:'overdue', date:cur, days:Math.round((cur-t)/DAY), text:'Overdue', full:`Overdue since ${cur.toLocaleDateString('en-US',{month:'short',day:'numeric'})}` };
   if (+cur === +t && !covered(a, cur)) return { level:'today', date:cur, days:0, text:'Due today' };
   const next = +cur > +t ? cur : dueOn(t.getFullYear(), t.getMonth()+1, a.dueDay);
   const days = Math.round((next - t)/DAY);
@@ -302,7 +302,7 @@ function dueInfo(a){
   return { level, date:next, days, text };
 }
 const dueIcon = { overdue:'⚠︎ ', today:'● ', soon:'', week:'', later:'' };
-function dueChip(a){ const d = dueInfo(a); return d ? `<span class="due due-${d.level}">${dueIcon[d.level]}${esc(d.text)}</span>` : ''; }
+function dueChip(a){ const d = dueInfo(a); return d ? `<span class="due due-${d.level}" title="${esc(d.full||d.text)}">${dueIcon[d.level]}${esc(d.text)}</span>` : ''; }
 const URGENCY_ORDER = { overdue:0, today:1, soon:2, week:3, later:4 };
 
 // ---------- pace ----------
@@ -316,7 +316,7 @@ function miniRing(pct, color){ const R=11, C=2*Math.PI*R, p=Math.max(0,Math.min(
 function tile(a, rank, sim){
   const done = a.balance <= 0.004; const pct = a.start ? 1 - a.balance/a.start : 1;
   const d = dueInfo(a);
-  const label = `${a.name}. ${done?'Paid off':money2(a.balance)+' left'}. ${done?'':'Snowball number '+rank+'. '}${a.tier?TIERS[a.tier].label+' pace':'Snowball pace'}. ${d?d.text:'No due date'}.`;
+  const label = `${a.name}. ${done?'Paid off':money2(a.balance)+' left'}. ${done?'':'Snowball number '+rank+'. '}${a.tier?TIERS[a.tier].label+' pace':'Snowball pace'}. ${d?(d.full||d.text):'No due date'}.`;
   return `<button class="acct tile glass ${a.tier&&!done?'t-'+a.tier:''} ${done?'t-done':''}" data-act="detail" data-id="${a.id}" aria-label="${esc(label)}">
     <div class="tile-top">${avatar(a,36,13)}<span style="flex:1"></span>${miniRing(pct, done?'var(--green-bar)':CAT[a.type].strong)}${done?'<span class="rank rank-done" aria-hidden="true">✓</span>':`<span class="rank" aria-hidden="true">#${rank}</span>`}</div>
     <div class="name">${esc(a.name)}</div>
@@ -338,7 +338,7 @@ function folder({ key, title, list, sim, ranks, color, total, defaultOpen }){
       <span class="cat-dot" aria-hidden="true"></span><span class="folder-title">${esc(title)}</span>
       <span class="folder-count">${list.length}</span><span class="folder-total">${money(total)}</span>
       <svg class="chev" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></h3>
-    <div class="folder-body" id="fb-${key}" ${open?'':'hidden'}><div class="tiles">${tiles}</div></div></section>`;
+    <div class="folder-body" id="fb-${key}" ${open?'':'hidden'}><div class="tiles n${Math.min(list.length,3)}">${tiles}</div></div></section>`;
 }
 function legendHTML(){
   return `<details class="legend-box"><summary>What the colors mean</summary><div class="legend-grid">
@@ -357,8 +357,8 @@ function viewAccounts(){
   const folders = TYPES.map(t => ({ t, list: open.filter(a=>a.type===t) })).filter(f=>f.list.length).map(f => folder({ key:CAT[f.t].key, title:CAT[f.t].label, list:f.list, sim, ranks, color:CAT[f.t].strong, total:f.list.reduce((s,a)=>s+a.balance,0), defaultOpen:defOpen })).join('');
   return `<h1 class="large-title">Accounts</h1>
   <div class="summary-row glass"><div><span class="micro">Total owed</span><b>${money2(totals().left)}</b></div><div><span class="micro">Accounts</span><b>${open.length} open${done.length?` · ${done.length} paid`:''}</b></div>
-    <div><span class="micro">Next due</span><b>${nd?esc(nd.a.name):'—'}</b>${nd?`<span class="due due-${nd.d.level}">${dueIcon[nd.d.level]}${esc(nd.d.text)}</span>`:''}</div></div>
-  <div class="toolbar"><button class="btn sm" data-act="check">Check my balances</button><button class="btn sm" data-act="calAll">Add reminders to Google Calendar</button></div>
+    <div><span class="micro">Next due</span><b>${nd?esc(nd.a.name):'—'}</b>${nd?`<span class="due due-${nd.d.level}" title="${esc(nd.d.full||nd.d.text)}">${dueIcon[nd.d.level]}${esc(nd.d.full||nd.d.text)}</span>`:''}</div></div>
+  <div class="toolbar"><button class="btn sm" data-act="check">Check my balances</button><button class="btn sm" data-act="calAll" aria-label="Add reminders to Google Calendar"><span class="lbl-full">Add reminders to Google Calendar</span><span class="lbl-short">Add to Calendar</span></button></div>
   <div class="section-head"><h2>Snowball order</h2><span class="muted">${open.length?plural(open.length,'account')+' to go':'All done'}</span></div>
   <p class="tip">${icon.info}<span>Why smallest first? Each paid-off debt is a quick win, and its payment rolls into the next one. The #1, #2… badges show the order.</span></p>
   ${legendHTML()}
@@ -400,7 +400,7 @@ function viewCalendar(){
     <div class="legend" style="margin-top:12px">${cats.map(c=>`<span class="cat-chip" style="--cat:${CAT[c].strong}"><i></i>${CAT[c].label}</span>`).join('')}<span><span class="cal-flag flag-today static">•</span> Due today</span><span><span class="cal-flag flag-overdue static">!</span> Overdue</span></div>
   </section>
   <section class="card glass" style="margin-top:14px"><h2 class="micro">Upcoming · next 7 days</h2>
-    ${up.length?`<ul class="list" style="margin-top:6px">${up.map(({a,d})=>`<li>${avatar(a,34,12)}<span style="flex:1;min-width:0"><b>${esc(a.name)}</b><br><span class="small">${money2(sim.firstPay[a.id]||a.min)} · ${a.tier?TIERS[a.tier].label:'Snowball'} pace</span></span><span class="due due-${d.level}">${dueIcon[d.level]}${esc(d.text)}</span></li>`).join('')}</ul>`:'<p class="muted">Nothing due in the next 7 days.</p>'}
+    ${up.length?`<ul class="list" style="margin-top:6px">${up.map(({a,d})=>`<li>${avatar(a,34,12)}<span style="flex:1;min-width:0"><b>${esc(a.name)}</b><br><span class="small">${money2(sim.firstPay[a.id]||a.min)} · ${a.tier?TIERS[a.tier].label:'Snowball'} pace</span></span><span class="due due-${d.level}" title="${esc(d.full||d.text)}">${dueIcon[d.level]}${esc(d.full||d.text)}</span></li>`).join('')}</ul>`:'<p class="muted">Nothing due in the next 7 days.</p>'}
   </section>`;
 }
 function openDay(day, trigger){
