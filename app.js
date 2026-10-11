@@ -174,7 +174,7 @@ function applyTheme(){
   document.documentElement.dataset.theme = t;
   document.documentElement.dataset.accent = ACCENTS.some(a=>a[0]===S.settings.accent) ? S.settings.accent : 'blue';
 }
-const ACCENTS = [['red','Red'],['orange','Orange'],['green','Green'],['blue','Blue'],['purple','Purple'],['pink','Pink']];
+const ACCENTS = [['red','Hot red'],['orange','Laser orange'],['green','Acid lime'],['blue','Electric cyan'],['purple','Ultraviolet'],['pink','Neon magenta']];
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
 function render(){
@@ -184,7 +184,13 @@ function render(){
   const m = $('#main');
   const empty = !S.accounts.length;
   document.body.classList.toggle('welcome-mode', empty);
+  const homeMode = !empty && tab === 'home'; document.body.classList.toggle('home-mode', homeMode);
+  let hb = document.getElementById('homeBg');
+  if (homeMode && !hb) { hb = document.createElement('div'); hb.id = 'homeBg'; hb.setAttribute('aria-hidden','true');
+    hb.innerHTML = `<picture><source media="(orientation:portrait) and (max-width:820px)" type="image/webp" srcset="bg/center-portrait-720.webp 720w, bg/center-portrait-1080.webp 1080w" sizes="100vw"><source media="(orientation:portrait)" type="image/webp" srcset="bg/center-1280.webp 1280w, bg/center-1920.webp 1920w, bg/center-2560.webp 2560w" sizes="180vh"><source type="image/webp" srcset="bg/wide-1280.webp 1280w, bg/wide-1920.webp 1920w, bg/wide-2560.webp 2560w" sizes="100vw"><img src="bg/wide-1280.webp" alt="" decoding="async"></picture><canvas class="sky-stars"></canvas><div class="home-scrim"></div>`;
+    document.body.prepend(hb); }
   if (!empty) stopStars();
+  if (!empty && tab === 'home') setTimeout(() => { const c = document.querySelector('#homeBg .sky-stars'); if (c) startStars(c); });
   m.innerHTML = `<div class="view">${empty ? viewEmpty() : tab==='accounts' ? viewAccounts() : tab==='calendar' ? viewCalendar() : tab==='progress' ? viewProgress() : viewHome()}</div>`;
   updateFab();
   bindView();
@@ -237,7 +243,7 @@ function startStars(cv){
       if (st.cross){ ctx.fillRect(st.x-4, st.y-.75, 9, 1.5); ctx.fillRect(st.x-.75, st.y-4, 1.5, 9); } else ctx.fillRect(st.x, st.y, st.s, st.s); } };
   starState = { cv, size, draw };
   if (reduced) { draw(0); return; }
-  const loop = t => { if (!document.body.contains(cv)) return stopStars(); if (!document.hidden) draw(t); starRAF = requestAnimationFrame(loop); };
+  const loop = t => { if (!document.body.contains(cv) || !cv.offsetParent && getComputedStyle(cv.parentNode).display==='none') return stopStars(); if (!document.hidden) draw(t); starRAF = requestAnimationFrame(loop); };
   starRAF = requestAnimationFrame(loop);
 }
 addEventListener('resize', () => { if (starState) { starState.size(); starState.draw(performance.now()); } });
@@ -301,7 +307,7 @@ function homeFeedHTML(){
 let homeExplore = false, lastGlobePct = null;
 function progressColor(p){
   // continuous warm->cool ramp in OKLCH: red -> orange -> yellow -> lime/mint -> green
-  const K=[[0,.67,.22,28],[.1,.67,.22,28],[.35,.79,.18,62],[.6,.88,.18,96],[.82,.86,.2,128],[1,.79,.21,148]];
+  const K=[[0,.64,.25,15],[.1,.64,.25,15],[.38,.70,.21,42],[.65,.95,.21,112],[1,.92,.23,128]];
   p=Math.max(0,Math.min(1,p)); let i=0; while(i<K.length-2 && p>K[i+1][0]) i++;
   const [a,b]=[K[i],K[i+1]]; const f=(p-a[0])/((b[0]-a[0])||1); const L=a[1]+(b[1]-a[1])*f, C=a[2]+(b[2]-a[2])*f, H=a[3]+(b[3]-a[3])*f;
   return `oklch(${L.toFixed(3)} ${C.toFixed(3)} ${H.toFixed(1)})`;
@@ -337,23 +343,56 @@ function globeHTML(pct, left){
    <div class="globe-text"><span class="globe-amt">${money(left)}</span><span class="globe-sub">left to pay</span></div>
   </div>`;
 }
+function homeBanners(){
+  return `${S.banner ? `<div class="banner span-all ${S.banner.good?'good':''}" role="status"><span><b>${esc(S.banner.text.split(' after ')[0])}</b> after ${esc(S.banner.text.split(' after ').slice(1).join(' after '))}</span><button aria-label="Dismiss" data-act="dismissBanner">✕</button></div>` : ''}
+    ${!S.flags.backupTip ? `<div class="banner span-all" role="note"><span>${icon.info}</span><span>Tip: ${STORAGE_MSG}</span><button class="btn sm" data-act="export" style="margin-left:auto;width:auto">Export</button><button aria-label="Dismiss tip" data-act="dismissTip" style="margin-left:0">✕</button></div>`:''}`;
+}
+function spearHTML(){
+  return `<svg class="spear-svg" viewBox="0 0 400 96" preserveAspectRatio="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="spGlass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".42"/><stop offset=".45" stop-color="#fff" stop-opacity=".1"/><stop offset=".55" stop-color="#fff" stop-opacity=".05"/><stop offset="1" stop-color="#fff" stop-opacity=".2"/></linearGradient>
+      <linearGradient id="spEdge" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color:var(--accent-sw)"/><stop offset=".6" stop-color="#FF2BD6"/><stop offset="1" style="stop-color:var(--accent-sw)"/></linearGradient>
+    </defs>
+    <!-- pommel: ankh-like ring + cap -->
+    <ellipse cx="18" cy="48" rx="12" ry="16" fill="url(#spGlass)" stroke="url(#spEdge)" stroke-width="2"/>
+    <rect x="28" y="40" width="14" height="16" rx="3" fill="url(#spGlass)" stroke="url(#spEdge)" stroke-width="1.6"/>
+    <!-- shaft -->
+    <rect x="40" y="22" width="262" height="52" rx="16" fill="url(#spGlass)" stroke="url(#spEdge)" stroke-width="2"/>
+    <path d="M52 30 H292" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/>
+    <!-- collar bands (Egyptian) -->
+    <rect x="298" y="16" width="10" height="64" rx="3" fill="url(#spGlass)" stroke="url(#spEdge)" stroke-width="1.6"/>
+    <rect x="312" y="24" width="6" height="48" rx="2" fill="url(#spGlass)" stroke="url(#spEdge)" stroke-width="1.4"/>
+    <!-- blade: leaf/khopesh-styled tip -->
+    <path d="M320 26 C350 26 372 34 396 48 C372 62 350 70 320 70 C330 60 333 36 320 26Z" fill="url(#spGlass)" stroke="url(#spEdge)" stroke-width="2.2"/>
+    <path d="M326 48 H390" stroke="#fff" stroke-opacity=".6" stroke-width="1.4"/>
+  </svg>`;
+}
 function viewHome(){
   const t = totals(); const sim = simulate(S.accounts); const open = openAccounts();
-  const pct = t.total ? t.paid/t.total : 0;
-  const html = `<h1 class="large-title">Home</h1>
-  <section class="globe-hero" aria-label="Debt progress">
+  const pct = t.total ? t.paid/t.total : 0; const next = open[0];
+  const toPay = Object.values(sim.firstPay).reduce((a,v)=>a+v,0), paidM = paidThisMonth();
+  const html = `<h1 class="large-title home-title">Home</h1>
+  <section class="globe-hero cyber" aria-label="Debt progress">
     ${globeHTML(pct, t.left)}
-    <p class="globe-free">${sim.freeDate ? `<button class="badge" data-act="toProgress">${debtFree(sim.freeDate)} ›</button>` : open.length ? '' : 'Every account is paid off. Nice work.'}</p>
-    <p class="globe-pct"><b>${Math.round(pct*100)}% paid</b> · ${money(t.paid)} of ${money(t.total)} · ${plural(open.length,'account')} to go</p>
+    <div class="spear" role="group" aria-label="Debt summary">
+      ${spearHTML()}
+      <div class="spear-text"><span class="spear-k">Total debt</span><span class="spear-v">${money(t.total)}</span></div>
+    </div>
+    <div class="spear-labels">
+      <div class="sl glass">${sim.freeDate ? `<button class="sl-btn" data-act="toProgress"><span class="sl-k">Debt free by</span><b>${fmtMonth(sim.freeDate)} ›</b></button>` : `<span class="sl-k">Status</span><b>${open.length ? 'Add payments' : 'All paid off'}</b>`}</div>
+      <div class="sl glass"><span class="sl-k">Paid</span><b>${Math.round(pct*100)}% · ${money(t.paid)}</b></div>
+      ${next ? `<div class="sl glass"><button class="sl-btn" data-act="log" data-id="${next.id}"><span class="sl-k">Next target</span><b>${esc(next.name)}</b><span class="sl-s">Pay ${money2(sim.firstPay[next.id]||next.min)} ›</span></button></div>` : ''}
+      <div class="sl glass"><span class="sl-k">This month</span><b>${money(paidM)} of ${money(toPay)}</b><span class="sl-s">${plural(open.length,'account')} to go</span></div>
+    </div>
+    <p class="sr-only">${sim.freeDate ? debtFree(sim.freeDate) : ''}</p>
     <button class="btn explore glass" data-act="explore" aria-expanded="${homeExplore}" aria-controls="homeFeed">${homeExplore?'Show less ↑':'Explore more ↓'}</button>
   </section>
-  <div class="grid home-banners">    ${S.banner ? `<div class="banner span-all ${S.banner.good?'good':''}" role="status"><span><b>${esc(S.banner.text.split(' after ')[0])}</b> after ${esc(S.banner.text.split(' after ').slice(1).join(' after '))}</span><button aria-label="Dismiss" data-act="dismissBanner">✕</button></div>` : ''}
-    ${!S.flags.backupTip ? `<div class="banner span-all" role="note"><span>${icon.info}</span><span>Tip: ${STORAGE_MSG}</span><button class="btn sm" data-act="export" style="margin-left:auto;width:auto">Export</button><button aria-label="Dismiss tip" data-act="dismissTip" style="margin-left:0">✕</button></div>`:''}
-</div>
+  <div class="grid home-banners">${homeBanners()}</div>
   <div id="homeFeed" class="feed" ${homeExplore?'':'hidden'}>${homeFeedHTML()}</div>`;
   lastGlobePct = pct;
   return html;
 }
+
 function simText(){
   const base = simulate(S.accounts), w = simulate(S.accounts,{extra:simExtra});
   if (!simExtra) return 'Try an amount and watch the date move.';

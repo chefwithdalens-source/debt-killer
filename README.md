@@ -37,3 +37,9 @@ There's a floating glass tab bar at the bottom on every screen size (Home, Accou
 
 ## Home
 The Home screen opens on a glass globe. Its liquid fill shows the percent paid, and its color shifts from red to orange, yellow and green as you pay. **Explore more** opens the full Home view below it. Every account also has a **What if I pay extra?** preview. Logging a payment plays a quick Anubis strike clip, which you can turn off in Settings.
+
+## Look
+- **Palette:** cyberpunk neon. Neon magenta #FF2BD6, electric cyan #00F0FF, acid lime #B6FF2E, laser orange #FF6A1A, ultraviolet #8A3CFF and hot red #FF1F4B, with deeper shades in light mode so text keeps AA contrast.
+- **Accent color:** pick one of 6 swatches in Settings. It changes buttons, links, the active tab and focus rings. Category, pace, due-date and progress colors don't change.
+- **Home:** a full-screen Anubis sky over the pyramids (AI-generated for the owner) with twinkling stars. The glass orb shows the debt left, and the glass spear shows the total debt with your summary labels.
+- **Welcome screen:** a starfield with drifting shapes. You can add your first account or import a backup.
