@@ -624,3 +624,74 @@ img.logo{width:44px;height:44px;border-radius:12px;outline:1px solid rgba(255,25
 .hero .bar>i{box-shadow:0 0 var(--glow-s) rgba(48,209,88,.6)}
 .badge{box-shadow:0 0 var(--glow-s) var(--green-glow)}
 .cel-art .conf>*{filter:drop-shadow(0 0 3px rgba(255,255,255,.4)) saturate(1.15)}
+
+/* =================== Accent color (UI pref) =================== */
+:root{--accent-btn:#0066D6;--accent-text:#0066D6;--accent-ink:#fff;--accent-sw:#007AFF;--accent-glow:rgba(0,122,255,.38)}
+[data-theme=dark]{--accent-btn:#0A84FF;--accent-text:#3D9BFF;--accent-ink:#06101f;--accent-sw:#0A84FF;--accent-glow:rgba(10,132,255,.55)}
+[data-accent=red]{--accent-btn:#D70015;--accent-text:#C4000F;--accent-ink:#fff;--accent-sw:#FF3B30;--accent-glow:rgba(255,59,48,.4)}
+[data-accent=orange]{--accent-btn:#FF9500;--accent-text:#A85300;--accent-ink:#1d1100;--accent-sw:#FF9500;--accent-glow:rgba(255,149,0,.45)}
+[data-accent=green]{--accent-btn:#34C759;--accent-text:#1A7F37;--accent-ink:#04210d;--accent-sw:#34C759;--accent-glow:rgba(52,199,89,.45)}
+[data-accent=purple]{--accent-btn:#8E3BBE;--accent-text:#8E3BBE;--accent-ink:#fff;--accent-sw:#AF52DE;--accent-glow:rgba(175,82,222,.4)}
+[data-accent=pink]{--accent-btn:#D30F45;--accent-text:#C70D40;--accent-ink:#fff;--accent-sw:#FF2D55;--accent-glow:rgba(255,45,85,.4)}
+[data-theme=dark][data-accent=red]{--accent-btn:#FF453A;--accent-text:#FF453A;--accent-ink:#0b0b12;--accent-sw:#FF453A;--accent-glow:rgba(255,69,58,.55)}
+[data-theme=dark][data-accent=orange]{--accent-btn:#FF9F0A;--accent-text:#FF9F0A;--accent-ink:#0b0b12;--accent-sw:#FF9F0A;--accent-glow:rgba(255,159,10,.55)}
+[data-theme=dark][data-accent=green]{--accent-btn:#30D158;--accent-text:#30D158;--accent-ink:#0b0b12;--accent-sw:#30D158;--accent-glow:rgba(48,209,88,.55)}
+[data-theme=dark][data-accent=purple]{--accent-btn:#BF5AF2;--accent-text:#BF5AF2;--accent-ink:#0b0b12;--accent-sw:#BF5AF2;--accent-glow:rgba(191,90,242,.55)}
+[data-theme=dark][data-accent=pink]{--accent-btn:#FF375F;--accent-text:#FF375F;--accent-ink:#0b0b12;--accent-sw:#FF375F;--accent-glow:rgba(255,55,95,.55)}
+html[data-accent]{--accent:var(--accent-text)}
+html[data-accent] .btn.primary,html[data-accent] .header-add{background:var(--accent-btn);color:var(--accent-ink);box-shadow:0 4px 16px var(--accent-glow)}
+html[data-accent] .chip[aria-pressed=true],html[data-accent] .cal-cell.today .cal-num{background:var(--accent-btn);color:var(--accent-ink)}
+html[data-accent] .tab[aria-current=page]{color:var(--accent-text)}
+html[data-accent] .tab[aria-current=page] svg{filter:drop-shadow(0 0 6px var(--accent-glow))}
+html[data-accent] .link-btn,html[data-accent] .legend-box summary{color:var(--accent-text)}
+html[data-accent] .segmented button[aria-checked=true]{box-shadow:0 0 0 2px var(--accent-btn),0 0 10px var(--accent-glow)}
+html[data-accent] input[type=checkbox]{accent-color:var(--accent-btn)}
+html[data-accent] :focus-visible{outline-color:color-mix(in srgb,var(--accent-btn) 70%,transparent)}
+.swatches{display:flex;justify-content:space-between;gap:8px;padding:12px 6px;max-width:360px}
+.swatch{width:44px;height:44px;border-radius:50%;border:0;background:transparent;padding:0;display:grid;place-items:center;cursor:pointer;box-shadow:inset 0 0 0 2.5px transparent;transition:box-shadow .15s}
+.swatch i{width:32px;height:32px;border-radius:50%;display:block}
+.swatch[aria-checked=true]{box-shadow:inset 0 0 0 2.5px var(--text)}
+.sw-red i{background:#FF3B30}.sw-orange i{background:#FF9500}.sw-green i{background:#34C759}.sw-blue i{background:#007AFF}.sw-purple i{background:#AF52DE}.sw-pink i{background:#FF2D55}
+[data-theme=dark] .sw-red i{background:#FF453A}[data-theme=dark] .sw-orange i{background:#FF9F0A}[data-theme=dark] .sw-green i{background:#30D158}[data-theme=dark] .sw-blue i{background:#0A84FF}[data-theme=dark] .sw-purple i{background:#BF5AF2}[data-theme=dark] .sw-pink i{background:#FF375F}
+.field .lbl{display:block;font-weight:600;font-size:15px}
+
+/* =================== Discord-style welcome =================== */
+body.welcome-mode .topbar,body.welcome-mode .tabbar{display:none}
+body.welcome-mode main{padding:0!important;max-width:none!important}
+.dwelcome{position:fixed;inset:0;z-index:5;overflow:hidden;color:#fff;display:flex;flex-direction:column;align-items:center;
+  background:linear-gradient(180deg,#07072e 0%,#0d0b45 40%,color-mix(in srgb,#3b3bd6 78%,var(--accent-sw)) 100%);
+  padding:calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px)}
+.dwelcome .stars{position:absolute;inset:0;width:100%;height:100%}
+.floaters{position:absolute;inset:0;pointer-events:none}
+.fl{position:absolute;display:block;filter:blur(7px);opacity:.55;animation:drift 18s ease-in-out infinite alternate}
+.fl svg{width:100%;height:auto;display:block}
+.fl-card{width:120px;left:-20px;top:30%;animation-duration:22s}
+.fl-coin{width:70px;right:10%;top:12%;animation-duration:17s;filter:blur(5px)}
+.fl-chain{width:110px;right:-10px;bottom:28%;animation-duration:20s}
+.fl-skull{width:56px;left:16%;top:6%;filter:blur(9px);opacity:.4;animation-duration:24s}
+.fl-card2{width:80px;left:58%;bottom:20%;filter:blur(10px);opacity:.4;animation-duration:26s}
+@keyframes drift{from{transform:translate(0,0) rotate(-6deg)}to{transform:translate(18px,-26px) rotate(8deg)}}
+.w-center{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;max-width:560px;width:100%}
+.w-art{position:relative;width:100%;display:grid;place-items:center;margin-bottom:6px}
+.w-anubis{position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);width:min(120%,560px);opacity:.38;mix-blend-mode:screen;
+  -webkit-mask-image:radial-gradient(ellipse 55% 60% at 50% 45%,#000 40%,transparent 75%);mask-image:radial-gradient(ellipse 55% 60% at 50% 45%,#000 40%,transparent 75%)}
+.w-anubis img{width:100%;height:auto;display:block}
+.w-logo{position:relative;width:96px;height:96px;border-radius:24px;box-shadow:0 0 0 1px rgba(255,255,255,.18),0 10px 40px rgba(0,0,0,.5),0 0 30px rgba(255,40,30,.25);margin-top:150px}
+.w-title{position:relative;margin:22px 0 10px;font:900 clamp(34px,10vw,56px)/.98 var(--font);letter-spacing:.01em;text-transform:uppercase;text-shadow:0 2px 20px rgba(0,0,0,.4)}
+.w-killer{font-family:"Pirata One",var(--font);font-weight:400;text-transform:none;font-size:1.22em;color:#fff;text-shadow:0 0 14px rgba(255,40,30,.55)}
+.w-sub{position:relative;margin:0;font-size:17px;line-height:1.4;color:#E6E6FF;max-width:420px}
+.w-actions{position:relative;width:100%;max-width:440px;display:grid;gap:12px}
+.w-btn{min-height:52px;border-radius:14px;border:0;font:600 17px var(--font);cursor:pointer}
+.w-primary{background:#fff;color:#111}
+.w-secondary{background:rgba(20,20,70,.72);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+.w-btn:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.w-note{margin:4px 0 0;text-align:center;font-size:13px;color:#D6D6FF}
+@media (min-width:700px){.w-logo{margin-top:220px;width:112px;height:112px}.w-anubis{width:620px}}
+@media (prefers-reduced-motion:reduce){.fl{animation:none}}
+body.welcome-mode .topbar,body.welcome-mode .tabbar{display:none!important}
+html[data-accent]:not([data-theme=dark]) .tab[aria-current=page],html[data-accent][data-theme=dark] .tab[aria-current=page]{color:var(--accent-text)}
+html[data-accent]:not([data-theme=dark]) .link-btn,html[data-accent][data-theme=dark] .link-btn,html[data-accent][data-theme=dark] .legend-box summary{color:var(--accent-text)}
+/* welcome: keep only a small Settings button, floating over the scene */
+body.welcome-mode .topbar{display:flex!important;position:fixed;top:0;left:0;right:0;z-index:20;justify-content:flex-end;pointer-events:none}
+body.welcome-mode .topbar .brand,body.welcome-mode .topbar #headerAdd{display:none!important}
+body.welcome-mode .topbar #settingsBtn{pointer-events:auto;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2)}

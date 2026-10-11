@@ -172,7 +172,9 @@ function applyTheme(){
   let t = S.settings.theme;
   if (S.settings.followSystem) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   document.documentElement.dataset.theme = t;
+  document.documentElement.dataset.accent = ACCENTS.some(a=>a[0]===S.settings.accent) ? S.settings.accent : 'blue';
 }
+const ACCENTS = [['red','Red'],['orange','Orange'],['green','Green'],['blue','Blue'],['purple','Purple'],['pink','Pink']];
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
 function render(){
@@ -181,6 +183,8 @@ function render(){
   document.querySelector('.tabbar').style.setProperty('--ti', ['home','accounts','calendar','progress'].indexOf(tab));
   const m = $('#main');
   const empty = !S.accounts.length;
+  document.body.classList.toggle('welcome-mode', empty);
+  if (!empty) stopStars();
   m.innerHTML = `<div class="view">${empty ? viewEmpty() : tab==='accounts' ? viewAccounts() : tab==='calendar' ? viewCalendar() : tab==='progress' ? viewProgress() : viewHome()}</div>`;
   updateFab();
   bindView();
@@ -193,18 +197,51 @@ const icon = {
 };
 
 function viewEmpty(){
-  return `<section class="welcome">
-    <picture class="anubis-hero" aria-hidden="true">
-      <source type="image/webp" srcset="logos/anubis/anubis-800.webp 800w, logos/anubis/anubis-1400.webp 1400w, logos/anubis/anubis-2048.webp 2048w" sizes="(min-width:900px) 620px, (min-width:700px) 540px, 92vw">
-      <img src="logos/anubis/anubis-800.jpg" alt="" width="800" height="677" decoding="async">
-    </picture>
-    <div class="empty card glass">
-      <h1>Start the battle</h1>
-      <p>Add each debt you owe. Debt Killer lines them up smallest first and tells you what to pay next.</p>
-      <button class="btn primary" data-act="add">Add your first account</button>
-      <p class="small" style="margin:18px 0 0">${STORAGE_MSG}</p>
+  const shapes = [
+    ['card','<svg viewBox="0 0 120 80"><rect x="4" y="4" width="112" height="72" rx="12" fill="#8f7bff"/><rect x="4" y="20" width="112" height="14" fill="#2b1f7a"/><rect x="16" y="50" width="40" height="8" rx="4" fill="#d9d2ff"/></svg>'],
+    ['coin','<svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="36" fill="#ffd36b"/><circle cx="40" cy="40" r="26" fill="none" stroke="#c98b00" stroke-width="5"/><path d="M40 24v32M33 31h10a5 5 0 0 1 0 10h-6a5 5 0 0 0 0 10h10" stroke="#9a6400" stroke-width="5" fill="none" stroke-linecap="round"/></svg>'],
+    ['chain','<svg viewBox="0 0 120 60"><rect x="6" y="14" width="48" height="32" rx="16" fill="none" stroke="#b9c3ff" stroke-width="9"/><rect x="66" y="14" width="48" height="32" rx="16" fill="none" stroke="#b9c3ff" stroke-width="9" transform="rotate(14 90 30)"/></svg>'],
+    ['skull','<svg viewBox="0 0 80 80"><path d="M40 6C21 6 10 19 10 35c0 10 5 17 11 21v12h38V56c6-4 11-11 11-21C70 19 59 6 40 6z" fill="#e9e6ff"/><circle cx="29" cy="37" r="8" fill="#ff3b30"/><circle cx="51" cy="37" r="8" fill="#ff3b30"/></svg>'],
+    ['card2','<svg viewBox="0 0 120 80"><rect x="4" y="4" width="112" height="72" rx="12" fill="#ff6fa8"/><rect x="18" y="22" width="22" height="16" rx="3" fill="#ffe1a8"/></svg>']];
+  return `<section class="dwelcome" aria-labelledby="wTitle">
+    <canvas class="stars" aria-hidden="true"></canvas>
+    <div class="floaters" aria-hidden="true">${shapes.map(([k,svg])=>`<span class="fl fl-${k}">${svg}</span>`).join('')}</div>
+    <div class="w-center">
+      <div class="w-art" aria-hidden="true">
+        <picture class="w-anubis"><source type="image/webp" srcset="logos/anubis/anubis-800.webp 800w, logos/anubis/anubis-1400.webp 1400w" sizes="(min-width:700px) 560px, 100vw"><img src="logos/anubis/anubis-800.jpg" alt="" width="800" height="677" decoding="async"></picture>
+        <img class="w-logo" src="logos/app/logo-96.png" srcset="logos/app/logo-96.png 1x, logos/app/logo-192.png 2x" width="96" height="96" alt="">
+      </div>
+      <h1 id="wTitle" class="w-title">Welcome to<br>Debt <span class="w-killer">Killer</span></h1>
+      <p class="w-sub">Add each debt you owe. Debt Killer lines them up smallest first and tells you what to pay next.</p>
+    </div>
+    <div class="w-actions">
+      <button class="w-btn w-primary" data-act="add">Add your first account</button>
+      <button class="w-btn w-secondary" id="wImport">Import a backup</button>
+      <input type="file" id="wImpFile" accept="application/json,.json" hidden aria-label="Backup file">
+      <p class="w-note">${STORAGE_MSG}</p>
     </div></section>`;
 }
+// ---------- Welcome starfield (canvas, paused when hidden, static for reduced motion) ----------
+let starRAF = 0, starState = null;
+function stopStars(){ cancelAnimationFrame(starRAF); starRAF = 0; starState = null; }
+function startStars(cv){
+  stopStars();
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches, dpr = Math.min(2, devicePixelRatio||1), ctx = cv.getContext('2d');
+  let W, H, stars;
+  const size = () => { W = cv.clientWidth; H = cv.clientHeight; cv.width = W*dpr; cv.height = H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+    const n = Math.round(W*H/4200); stars = Array.from({length:n}, (_,i) => ({ x:Math.random()*W, y:Math.random()*H, s:Math.random()<.85?1.5:2.5, cross:i%23===0, p:Math.random()*6.28, v:.6+Math.random()*1.6 })); };
+  size();
+  const draw = t => { ctx.clearRect(0,0,W,H);
+    for (const st of stars){ const a = reduced ? .7 : .35 + .65*Math.abs(Math.sin(st.p + t/1000*st.v));
+      ctx.fillStyle = `rgba(214,214,255,${a.toFixed(2)})`;
+      if (st.cross){ ctx.fillRect(st.x-4, st.y-.75, 9, 1.5); ctx.fillRect(st.x-.75, st.y-4, 1.5, 9); } else ctx.fillRect(st.x, st.y, st.s, st.s); } };
+  starState = { cv, size, draw };
+  if (reduced) { draw(0); return; }
+  const loop = t => { if (!document.body.contains(cv)) return stopStars(); if (!document.hidden) draw(t); starRAF = requestAnimationFrame(loop); };
+  starRAF = requestAnimationFrame(loop);
+}
+addEventListener('resize', () => { if (starState) { starState.size(); starState.draw(performance.now()); } });
+document.addEventListener('visibilitychange', () => { const f = document.querySelector('.floaters'); if (f) f.style.animationPlayState = document.hidden ? 'paused' : ''; document.querySelectorAll('.fl').forEach(e => e.style.animationPlayState = document.hidden ? 'paused' : ''); });
 
 function gauge(pct, size=120, dark=true){
   const r = size/2 - 10, c = Math.PI * r; // half-circle gauge
@@ -690,6 +727,9 @@ function viewProgress(){
 }
 
 function bindView(){
+  const cv = document.querySelector('.dwelcome .stars'); if (cv) startStars(cv);
+  const wi = document.getElementById('wImport');
+  if (wi) { const f = document.getElementById('wImpFile'); wi.addEventListener('click', () => f.click()); f.addEventListener('change', e => { const file = e.target.files[0]; if (file) importFile(file, wi); e.target.value = ''; }); }
   const m = $('#main');
   bindExtra(m);
   const gl = m.querySelector('.g-liquid'); if (gl) requestAnimationFrame(() => requestAnimationFrame(() => { gl.style.transform = `translateY(${gl.dataset.to}px)`; }));
@@ -961,7 +1001,7 @@ function importFile(file, trigger){
   const r = new FileReader();
   r.onload = () => { let n = null; try { n = validBackup(JSON.parse(r.result)); } catch {}
     const msg = $('#impMsg');
-    if (!n){ if (msg){ msg.hidden = false; msg.innerHTML = icon.err + '<span>That file isn’t a Debt Killer backup.</span>'; } return; }
+    if (!n){ if (msg){ msg.hidden = false; msg.innerHTML = icon.err + '<span>That file isn’t a Debt Killer backup.</span>'; } else toast('That file isn’t a Debt Killer backup.'); return; }
     if (msg) msg.hidden = true;
     confirmDialog({ title:'Replace your data?', trigger, text:`This replaces everything on this device with the backup (${plural(n.accounts.length,'account')}, ${plural(n.payments.length,'payment')}).`, ok:'Replace', onOk: () => { S = n; save(); closeAll(); render(); toast('Backup imported'); } });
   };
@@ -974,6 +1014,9 @@ function openSettings(trigger){
    ${field({id:'s_budget',label:'Monthly budget — optional',value:s.budget??'',placeholder:'$0',help:'The total you can put toward debt each month. Anything above your planned payments goes to the smallest balance.',attrs:'inputmode="decimal"'})}
    <div class="field"><label for="s_months">Default number of payments</label><select id="s_months" aria-describedby="s_months-h">${[4,5,6,7,8].map(n=>`<option value="${n}" ${s.defaultMonths===n?'selected':''}>${plural(n,'payment')}</option>`).join('')}</select>
    <div class="help" id="s_months-h">For an account with no pace set, the one you’re focused on aims to be paid off in this many monthly payments.</div></div>
+   <div class="field"><span class="lbl" id="accLbl">Accent color</span>
+     <div class="swatches" role="radiogroup" aria-labelledby="accLbl">${ACCENTS.map(([k,n])=>{ const on = (s.accent||'blue')===k; return `<button type="button" role="radio" class="swatch sw-${k}" data-accent="${k}" aria-checked="${on}" aria-label="${n}" tabindex="${on?0:-1}"><i></i></button>`; }).join('')}</div>
+     <div class="help">Changes buttons, links and the active tab. Category, pace and due-date colors stay the same.</div></div>
    <div class="switch"><label for="s_dark"><b>Dark mode</b></label><input type="checkbox" role="switch" id="s_dark" ${s.theme==='dark'?'checked':''} ${s.followSystem?'disabled':''}></div>
    <div class="switch"><label for="s_strike"><b>Anubis strike when you log a payment</b></label><input type="checkbox" role="switch" id="s_strike" ${s.strike!==false?'checked':''}></div>
    <div class="switch"><label for="s_sys"><b>Match system appearance</b></label><input type="checkbox" role="switch" id="s_sys" ${s.followSystem?'checked':''}></div>
@@ -986,10 +1029,15 @@ function openSettings(trigger){
   <hr class="sep"><div class="about"><img src="logos/anubis/anubis-512.png" alt="Anubis illustration" width="72" height="72" loading="lazy"><div><h3 class="micro" style="margin:0 0 4px">About Debt Killer</h3><p class="small" style="margin:0">A debt-snowball planner that keeps everything in this browser. ${STORAGE_MSG}</p></div></div>`;
   openDialog({ title:'Settings', body, trigger, onMount: sh => {
     const f = sh.querySelector('form'); f.querySelector('[data-close]').addEventListener('click', closeTop);
-    const prevTheme = s.theme, prevSys = s.followSystem;
+    const prevTheme = s.theme, prevSys = s.followSystem, prevAcc = s.accent;
+    const sws = [...sh.querySelectorAll('.swatch')];
+    const pick = (b, focus) => { sws.forEach(x => { const on = x === b; x.setAttribute('aria-checked', on); x.tabIndex = on ? 0 : -1; }); s.accent = b.dataset.accent; applyTheme(); if (focus) b.focus(); };
+    sws.forEach((b,i) => { b.addEventListener('click', () => pick(b)); b.addEventListener('keydown', e => {
+      const d = {ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[e.key]; if (d) { e.preventDefault(); pick(sws[(i+d+sws.length)%sws.length], true); }
+      else if (e.key==='Home'||e.key==='End') { e.preventDefault(); pick(sws[e.key==='Home'?0:sws.length-1], true); } }); });
     f.s_dark.addEventListener('change', () => { s.theme = f.s_dark.checked?'dark':'light'; applyTheme(); });
     f.s_sys.addEventListener('change', () => { s.followSystem = f.s_sys.checked; f.s_dark.disabled = s.followSystem; applyTheme(); });
-    sh._revert = () => { s.theme = prevTheme; s.followSystem = prevSys; applyTheme(); };
+    sh._revert = () => { s.theme = prevTheme; s.followSystem = prevSys; s.accent = prevAcc; applyTheme(); };
     f.addEventListener('submit', e => { e.preventDefault(); const b = num(f.s_budget.value); const er = (b!==null && (isNaN(b)||b<0)) ? 'Budget must be $0 or more.' : null; setErr(f,'s_budget',er); if (er){ f.s_budget.focus(); return; }
       s.budget = b || null; s.defaultMonths = +f.s_months.value; s.strike = f.s_strike.checked; sh._saved = true; noteChange('updating settings'); closeAll(); render(); toast('Settings saved'); });
     sh.querySelector('#expJ').addEventListener('click', exportJSON);
