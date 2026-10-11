@@ -171,8 +171,6 @@ $('#headerAdd').addEventListener('click', e => openAccountForm(null, e.currentTa
 function applyTheme(){
   let t = S.settings.theme;
   if (S.settings.followSystem) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  // Home, Accounts and Calendar sit on black space: always render them with the dark palette for AA legibility
-  if (S.accounts.length && ['home','accounts','calendar','progress'].includes(tab)) t = 'dark';
   document.documentElement.dataset.theme = t;
   document.documentElement.dataset.accent = ACCENTS.some(a=>a[0]===S.settings.accent) ? S.settings.accent : 'blue';
 }
@@ -190,7 +188,7 @@ function render(){
   document.body.classList.toggle('home-mode', homeMode); document.body.classList.toggle('space-mode', spaceMode); document.body.classList.toggle('acc-space', spaceMode && tab === 'accounts');
   let hb = document.getElementById('homeBg');
   if (spaceMode && !hb) { hb = document.createElement('div'); hb.id = 'homeBg'; hb.setAttribute('aria-hidden','true');
-    hb.innerHTML = `<canvas class="sky-stars"></canvas><img class="space-anubis" src="bg/anubis-gray-838.webp" srcset="bg/anubis-gray-419.webp 419w, bg/anubis-gray-838.webp 838w" sizes="(min-width:900px) 46vw, 100vw" alt="" decoding="async">
+    hb.innerHTML = `<canvas class="sky-stars"></canvas>
       <svg class="planet" viewBox="0 0 400 400"><defs><radialGradient id="plB" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".5" stop-color="#9fb6ff" stop-opacity=".08"/><stop offset="1" stop-color="#fff" stop-opacity=".02"/></radialGradient><linearGradient id="plRim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".5" stop-color="#fff" stop-opacity=".05"/><stop offset="1" stop-color="#9fe8ff" stop-opacity=".45"/></linearGradient></defs>
       <ellipse cx="200" cy="200" rx="196" ry="44" fill="none" stroke="#cfe0ff" stroke-opacity=".18" stroke-width="10" transform="rotate(-18 200 200)"/>
       <circle cx="200" cy="200" r="130" fill="url(#plB)" stroke="url(#plRim)" stroke-width="2"/>
@@ -249,7 +247,7 @@ function startStars(cv){
   size();
   const draw = t => { ctx.clearRect(0,0,W,H);
     for (const st of stars){ const a = reduced ? .7 : .35 + .65*Math.abs(Math.sin(st.p + t/1000*st.v));
-      ctx.fillStyle = `rgba(214,214,255,${a.toFixed(2)})`;
+      ctx.fillStyle = cv.classList.contains('sky-stars') && document.documentElement.dataset.theme !== 'dark' ? `rgba(70,64,130,${(a*.45).toFixed(2)})` : `rgba(214,214,255,${a.toFixed(2)})`;
       if (st.cross){ ctx.fillRect(st.x-4, st.y-.75, 9, 1.5); ctx.fillRect(st.x-.75, st.y-4, 1.5, 9); } else ctx.fillRect(st.x, st.y, st.s, st.s); } };
   starState = { cv, size, draw };
   if (reduced) { draw(0); return; }
@@ -380,27 +378,14 @@ function viewHome(){
   const t = totals(); const sim = simulate(S.accounts); const open = openAccounts();
   const pct = t.total ? t.paid/t.total : 0; const next = open[0];
   const toPay = Object.values(sim.firstPay).reduce((a,v)=>a+v,0), paidM = paidThisMonth();
-  const html = `<h1 class="sr-only">Home</h1>
-  <section class="globe-hero cyber" aria-label="Debt progress">
-    ${globeHTML(pct, t.left)}
-    <div class="spear" role="group" aria-label="Debt summary">
-      ${spearHTML()}
-      <div class="spear-text"><span class="spear-k">Total debt</span><span class="spear-v">${money(t.total)}</span></div>
-    </div>
-    <p class="sr-only">${sim.freeDate ? debtFree(sim.freeDate) : ''}</p>
-  </section>
+  return `<h1 class="large-title">Home</h1>
+  <div class="grid home-banners">${homeBanners()}</div>
+  <div id="homeFeed" class="feed">${homeFeedHTML()}</div>
   <section class="home-stats" aria-label="Summary">
     <div class="sl glass">${sim.freeDate ? `<button class="sl-btn" data-act="toProgress"><span class="sl-k">Debt Free</span><b>${fmtMonth(sim.freeDate)} ›</b><span class="sl-s">See your plan</span></button>` : `<span class="sl-k">Debt Free</span><b>${open.length ? 'Add payments to see a date' : 'All paid off'}</b>`}</div>
     <div class="sl glass"><span class="sl-k">Paid</span><b>${Math.round(pct*100)}% · ${money(t.paid)}</b><span class="sl-s">of ${money(t.total)}</span></div>
     ${next ? `<div class="sl glass"><button class="sl-btn" data-act="log" data-id="${next.id}"><span class="sl-k">Next Target This Month</span><b>${esc(next.name)}</b><span class="sl-s">Pay ${money2(sim.firstPay[next.id]||next.min)} · ${money(paidM)} of ${money(toPay)} paid this month ›</span></button></div>` : `<div class="sl glass"><span class="sl-k">Next Target This Month</span><b>Nothing left</b></div>`}
-  </section>
-  <section class="home-explore">
-    <button class="btn explore glass" data-act="explore" aria-expanded="${homeExplore}" aria-controls="homeFeed">${homeExplore?'Show less ↑':'Explore more ↓'}</button>
-  </section>
-  <div class="grid home-banners">${homeBanners()}</div>
-  <div id="homeFeed" class="feed" ${homeExplore?'':'hidden'}>${homeFeedHTML()}</div>`;
-  lastGlobePct = pct;
-  return html;
+  </section>`;
 }
 
 function simText(){
@@ -857,9 +842,7 @@ function bindView(){
   const gl = m.querySelector('.g-liquid'); if (gl) requestAnimationFrame(() => requestAnimationFrame(() => { gl.style.transform = `translateY(${gl.dataset.to}px)`; }));
   const feed = m.querySelector('#homeFeed'); if (feed && !feed.hidden) observeReveal(feed);
   splashObs?.disconnect(); document.body.classList.remove('at-splash');
-  const hero = m.querySelector('.globe-hero.cyber');
-  if (hero) { document.body.classList.add('at-splash');
-    if ('IntersectionObserver' in window) { splashObs = new IntersectionObserver(es => es.forEach(e => document.body.classList.toggle('at-splash', e.intersectionRatio > 0.35)), { threshold:[0,.35,.6,1] }); splashObs.observe(hero); }
+  if (m.querySelector('.home-stats')) {
     const st = m.querySelectorAll('.home-stats > .sl');
     if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) st.forEach(x => x.classList.add('in'));
     else { const o = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ e.target.classList.add('in'); o.unobserve(e.target); } }), { rootMargin:'0px 0px -8% 0px' });

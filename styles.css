@@ -874,3 +874,36 @@ body.acc-space .planet{display:block}
 .flag-today{color:#1a0005}
 #homeBg img.space-anubis{inset:auto;top:4vh;left:50%;width:auto;height:min(92vh,1000px);aspect-ratio:838/1000;object-fit:contain}
 @media (orientation:landscape) and (min-width:900px){#homeBg img.space-anubis{left:auto;right:4vw;height:96vh}}
+
+/* =================== Light mode for space screens (daytime sky / pale nebula) =================== */
+:root:not([data-theme=dark]) body.space-mode,:root:not([data-theme=dark]) body.space-mode #homeBg{background:
+  radial-gradient(900px 600px at 15% 0%,rgba(196,186,255,.55),transparent 60%),
+  radial-gradient(800px 600px at 100% 30%,rgba(170,214,255,.5),transparent 60%),
+  radial-gradient(700px 500px at 40% 100%,rgba(255,214,240,.45),transparent 60%),
+  linear-gradient(180deg,#fbfbff 0%,#eef0ff 55%,#f3ecff 100%)}
+:root:not([data-theme=dark]) .home-scrim{background:linear-gradient(180deg,transparent 60%,rgba(250,248,255,.6) 100%)}
+:root:not([data-theme=dark]) #homeBg img.space-anubis{opacity:.26;filter:contrast(1.05)}
+:root:not([data-theme=dark]) .planet{filter:invert(1) hue-rotate(200deg) drop-shadow(0 0 30px rgba(120,110,255,.18));opacity:.32}
+/* light frosted hero panels */
+:root:not([data-theme=dark]) .sl{background:rgba(255,255,255,.78)!important;border:1px solid rgba(255,255,255,.95)!important;color:#14171c;box-shadow:0 8px 24px rgba(60,50,140,.12),inset 0 1px 0 #fff}
+:root:not([data-theme=dark]) .sl-k{color:#4a3fa0}
+:root:not([data-theme=dark]) .sl-s{color:#3d4250}
+:root:not([data-theme=dark]) .sl-btn:focus-visible{outline-color:var(--accent-text)}
+:root:not([data-theme=dark]) body.home-mode .explore{background:rgba(255,255,255,.8)!important;color:#14171c;border:1px solid rgba(255,255,255,.95)}
+:root:not([data-theme=dark]) .spear::before{background:rgba(255,255,255,.62)}
+:root:not([data-theme=dark]) .spear-text{color:#14171c}
+:root:not([data-theme=dark]) .spear-k{color:#3a3f4c}
+:root:not([data-theme=dark]) .spear-v{text-shadow:0 0 10px color-mix(in srgb,var(--accent-sw) 45%,transparent)}
+:root:not([data-theme=dark]) .spear{filter:drop-shadow(0 0 8px color-mix(in srgb,var(--accent-sw) 45%,transparent)) drop-shadow(0 10px 22px rgba(60,50,140,.18))}
+:root:not([data-theme=dark]) .cyber .globe-amt,:root:not([data-theme=dark]) .cyber .globe-sub{background:rgba(255,255,255,.82);color:#14171c;border-color:rgba(255,255,255,.95)}
+:root:not([data-theme=dark]) .cyber .globe-sub{color:#2c313a}
+:root:not([data-theme=dark]) .cyber .g-rim{stroke:rgba(90,80,170,.45)}
+:root:not([data-theme=dark]) .cyber .g-body{fill:rgba(255,255,255,.35)}
+:root:not([data-theme=dark]) body.space-mode main{--card:rgba(255,255,255,.8)}
+:root:not([data-theme=dark]) body.space-mode .folder{background:rgba(255,255,255,.82)}
+/* tab bar: when Home hides on the splash, remaining tabs re-center smoothly */
+.tabbar .tab[data-tab=home]{transition:flex-grow .4s cubic-bezier(.3,.9,.3,1),max-width .4s cubic-bezier(.3,.9,.3,1),opacity .3s ease,padding .4s;max-width:300px}
+body.home-mode.at-splash .tabbar .tab[data-tab=home]{flex-grow:0;max-width:0;padding-left:0;padding-right:0;overflow:hidden;opacity:0}
+@media (prefers-reduced-motion:reduce){.tabbar .tab[data-tab=home]{transition:none}}
+:root:not([data-theme=dark]) body.space-mode{--text2:#3a3f4b;--text3:#3f4452}
+:root:not([data-theme=dark]) body.space-mode .legend-box summary,:root:not([data-theme=dark]) body.space-mode .view>.link-btn,:root:not([data-theme=dark]) body.space-mode .tip .link-btn{color:color-mix(in srgb,var(--accent-text) 68%,#000)}
