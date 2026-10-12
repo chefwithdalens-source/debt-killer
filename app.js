@@ -184,7 +184,7 @@ function render(){
   const m = $('#main');
   const empty = !S.accounts.length;
   document.body.classList.toggle('welcome-mode', empty);
-  const homeMode = !empty && tab === 'home', spaceMode = !empty && true;
+  const homeMode = !empty && tab === 'home', spaceMode = false;
   document.body.classList.toggle('home-mode', homeMode); document.body.classList.toggle('space-mode', spaceMode); document.body.classList.toggle('acc-space', spaceMode && tab === 'accounts');
   let hb = document.getElementById('homeBg');
   if (spaceMode && !hb) { hb = document.createElement('div'); hb.id = 'homeBg'; hb.setAttribute('aria-hidden','true');

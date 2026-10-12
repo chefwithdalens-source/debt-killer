@@ -907,3 +907,16 @@ body.home-mode.at-splash .tabbar .tab[data-tab=home]{flex-grow:0;max-width:0;pad
 @media (prefers-reduced-motion:reduce){.tabbar .tab[data-tab=home]{transition:none}}
 :root:not([data-theme=dark]) body.space-mode{--text2:#3a3f4b;--text3:#3f4452}
 :root:not([data-theme=dark]) body.space-mode .legend-box summary,:root:not([data-theme=dark]) body.space-mode .view>.link-btn,:root:not([data-theme=dark]) body.space-mode .tip .link-btn{color:color-mix(in srgb,var(--accent-text) 68%,#000)}
+
+/* =================== Solid backgrounds: white (light) / charcoal #141414 (dark) =================== */
+:root{--bg1:#FFFFFF;--bg2:#FFFFFF;--bg3:#FFFFFF}
+[data-theme=dark]{--bg1:#141414;--bg2:#141414;--bg3:#141414;
+  --card:rgba(30,30,30,.82);--card-solid:#1E1E1E;--card-border:rgba(255,255,255,.08);
+  --hair:rgba(255,255,255,.08);--fill:rgba(255,255,255,.07);--fill2:rgba(255,255,255,.12)}
+body,body.space-mode{background:var(--bg1)}
+.bg{background:var(--bg1)!important}
+#homeBg{display:none!important}
+:root:not([data-theme=dark]) .card.glass,:root:not([data-theme=dark]) .folder{border-color:rgba(20,23,28,.08)}
+[data-theme=dark] .sheet,[data-theme=dark] .modal{background-color:rgba(36,36,36,.92)}
+[data-theme=dark] .tabbar{background:rgba(40,40,40,.72)}
+body.home-mode,body.space-mode,body{background:var(--bg1)!important}body.welcome-mode{background:#07072e!important}

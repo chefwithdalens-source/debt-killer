@@ -41,5 +41,5 @@ Home opens with your total debt left, followed by the next target, this month's 
 ## Look
 - **Palette:** cyberpunk neon. Neon magenta #FF2BD6, electric cyan #00F0FF, acid lime #B6FF2E, laser orange #FF6A1A, ultraviolet #8A3CFF and hot red #FF1F4B, with deeper shades in light mode so text keeps AA contrast.
 - **Accent color:** pick one of 6 swatches in Settings. It changes buttons, links, the active tab and focus rings. Category, pace, due-date and progress colors don't change.
-- **Space background:** Home, Accounts, Calendar and Progress sit on a starfield. Dark mode is black space; light mode is a pale daytime nebula. Accounts adds a glass planet.
+- **Background:** solid white (#FFFFFF) in light mode and solid charcoal (#141414) in dark mode. Dark cards sit slightly lighter (#1E1E1E).
 - **Welcome screen:** a starfield with drifting shapes. You can add your first account or import a backup.
