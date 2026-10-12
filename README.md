@@ -1,6 +1,6 @@
-# Debt Killer
+# Debt Slayer
 
-A simple debt-snowball planner. Add each debt you owe; Debt Killer lines them up smallest balance first, tells you what to pay next, projects your debt-free month (including interest when you enter an APR), and tracks your progress with charts.
+A simple debt-snowball planner. Add each debt you owe; Debt Slayer lines them up smallest balance first, tells you what to pay next, projects your debt-free month (including interest when you enter an APR), and tracks your progress with charts.
 
 ## Your data stays in your browser
 - Every visitor starts with an empty slate.
@@ -43,3 +43,9 @@ Home opens with your total debt left, followed by the next target, this month's 
 - **Accent color:** pick one of 6 swatches in Settings. It changes buttons, links, the active tab and focus rings. Category, pace, due-date and progress colors don't change.
 - **Background:** solid white (#FFFFFF) in light mode and solid charcoal (#141414) in dark mode. Dark cards sit slightly lighter (#1E1E1E).
 - **Welcome screen:** a starfield with drifting shapes. You can add your first account or import a backup.
+
+## Debt Slayer redesign
+- **Name:** the app is now **Debt Slayer** (formerly Debt Killer). Your saved data stays under the same browser storage key, and backups exported by Debt Killer still import.
+- **Logo:** a gold line-art Anubis head in a gold circle, cropped from the owner-supplied artwork, upscaled and sharpened (`logos/app/master.png`; every icon size is built from it). The skull mark is retired as the primary logo.
+- **Look:** navy-charcoal frosted glass in dark mode, white with light frosted cards in light mode, with **Gold** as the default accent (still changeable in Settings). Green means paid or progress; red means interest.
+- **Home:** a Total Debt hero with a balance sparkline, Activity, Next target, This month summary, Details, and a What-if grid with one tile per account. iPad and desktop get a left icon rail.

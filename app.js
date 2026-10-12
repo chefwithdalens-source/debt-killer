@@ -172,9 +172,9 @@ function applyTheme(){
   let t = S.settings.theme;
   if (S.settings.followSystem) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   document.documentElement.dataset.theme = t;
-  document.documentElement.dataset.accent = ACCENTS.some(a=>a[0]===S.settings.accent) ? S.settings.accent : 'blue';
+  document.documentElement.dataset.accent = ACCENTS.some(a=>a[0]===S.settings.accent) ? S.settings.accent : 'gold';
 }
-const ACCENTS = [['red','Hot red'],['orange','Laser orange'],['green','Acid lime'],['blue','Electric cyan'],['purple','Ultraviolet'],['pink','Neon magenta']];
+const ACCENTS = [['gold','Gold'],['red','Hot red'],['orange','Laser orange'],['green','Acid lime'],['blue','Electric cyan'],['purple','Ultraviolet'],['pink','Neon magenta']];
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
 function render(){
@@ -224,8 +224,8 @@ function viewEmpty(){
         <picture class="w-anubis"><source type="image/webp" srcset="logos/anubis/anubis-800.webp 800w, logos/anubis/anubis-1400.webp 1400w" sizes="(min-width:700px) 560px, 100vw"><img src="logos/anubis/anubis-800.jpg" alt="" width="800" height="677" decoding="async"></picture>
         <img class="w-logo" src="logos/app/logo-96.png" srcset="logos/app/logo-96.png 1x, logos/app/logo-192.png 2x" width="96" height="96" alt="">
       </div>
-      <h1 id="wTitle" class="w-title">Welcome to<br>Debt <span class="w-killer">Killer</span></h1>
-      <p class="w-sub">Add each debt you owe. Debt Killer lines them up smallest first and tells you what to pay next.</p>
+      <h1 id="wTitle" class="w-title">Welcome to<br>Debt <span class="w-killer">Slayer</span></h1>
+      <p class="w-sub">Add each debt you owe. Debt Slayer lines them up smallest first and tells you what to pay next.</p>
     </div>
     <div class="w-actions">
       <button class="w-btn w-primary" data-act="add">Add your first account</button>
@@ -372,34 +372,117 @@ function activityHTML(){
   return `<ul class="lin-activity">${ps.map(p => { const a = S.accounts.find(x => x.id === p.accountId);
     return `<li>${a ? avatar(a, 22, 9) : ''}<span class="la-t"><b>${money2(p.amount)}</b> paid to <b>${esc(a ? a.name : 'a removed account')}</b>${a && a.balance <= 0.004 ? ' <span class="la-tag">paid off</span>' : ''}</span><time class="la-time" datetime="${p.date}" title="${fmtDay(p.date)}">${ago(p.date)}</time><button type="button" class="la-rm" data-rmpay="${p.id}" aria-label="Remove ${money2(p.amount)} payment on ${fmtDay(p.date)}">Remove</button></li>`; }).join('')}</ul>`;
 }
+const IC = {
+  down:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
+  card:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M3 10h18"/></svg>',
+  check:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  clock:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+  target:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/></svg>',
+  cal:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><circle cx="12" cy="14.5" r="1.3"/></svg>',
+  pie:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5H12z"/><path d="M14.5 2.8v6.7h6.7a8 8 0 0 0-6.7-6.7z"/></svg>',
+  pct:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18L18 6"/><circle cx="7" cy="7" r="2.2"/><circle cx="17" cy="17" r="2.2"/></svg>',
+  spark:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
+  info:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.4"/></svg>',
+};
+function ago(iso){
+  const d = Math.round((new Date(todayISO()+'T12:00') - new Date(iso+'T12:00')) / 864e5);
+  return d <= 0 ? 'Today' : d === 1 ? 'Yesterday' : d < 7 ? `${d} days ago` : new Date(iso+'T12:00').toLocaleDateString('en-US',{ month:'short', day:'numeric' });
+}
+function balanceHistory(n = 7){
+  const left = totals().left, now = new Date(), out = [];
+  for (let i = n-1; i >= 0; i--){ const end = new Date(now.getFullYear(), now.getMonth()-i+1, 0); const iso = isoOf(end);
+    out.push(i === 0 ? left : left + S.payments.filter(p => p.date > iso).reduce((a,p)=>a+p.amount,0)); }
+  return out;
+}
+function mountainSVG(vals){
+  const W = 320, H = 90, mx = Math.max(...vals, 1), mn = Math.min(...vals) * .85;
+  const pts = vals.map((v,i) => [i*(W/(vals.length-1)), H - 10 - ((v-mn)/((mx-mn)||1))*(H-26)]);
+  let d = `M${pts[0][0]} ${pts[0][1]}`; for (let i=1;i<pts.length;i++){ const [x0,y0]=pts[i-1],[x1,y1]=pts[i], cx=(x0+x1)/2; d += ` C${cx} ${y0} ${cx} ${y1} ${x1} ${y1}`; }
+  return `<svg class="mtn" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="mtnG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--mtn)" stop-opacity=".45"/><stop offset="1" style="stop-color:var(--mtn)" stop-opacity="0"/></linearGradient></defs>
+    <path d="${d} L${W} ${H} L0 ${H}Z" fill="url(#mtnG)"/><path d="${d}" fill="none" style="stroke:var(--mtn)" stroke-opacity=".7" stroke-width="1.5"/></svg>`;
+}
+function monthInterest(){ return S.accounts.reduce((a,x) => a + (x.apr && x.balance > 0 ? x.balance * x.apr/100/12 : 0), 0); }
+function activityItems(){
+  const ev = [];
+  S.payments.forEach(p => { const a = S.accounts.find(x => x.id === p.accountId); ev.push({ date:p.date, kind:'pay', p, a }); });
+  S.accounts.forEach(a => { if (a.created) ev.push({ date:a.created, kind:'add', a });
+    if (a.balance <= 0.004) { const last = S.payments.filter(p => p.accountId === a.id).map(p => p.date).sort().pop(); if (last) ev.push({ date:last, kind:'off', a }); } });
+  return ev.sort((x,y) => y.date.localeCompare(x.date) || (x.kind==='off' ? -1 : 1)).slice(0, 6);
+}
+function activityHTML(){
+  const ev = activityItems();
+  if (!ev.length) return `<p class="lin-empty">No activity yet. Payments and new accounts show up here.</p>`;
+  return `<ul class="sl-act">${ev.map(e => {
+    const nm = esc(e.a ? e.a.name : 'a removed account');
+    if (e.kind === 'pay') return `<li><span class="ai ai-green">${IC.down}</span><span class="at"><b>Payment made</b><span>${nm}</span></span><span class="av"><b class="neg">−${money2(e.p.amount)}</b><time datetime="${e.date}" title="${fmtDay(e.date)}">${ago(e.date)}</time></span><button type="button" class="la-rm" data-rmpay="${e.p.id}" aria-label="Remove ${money2(e.p.amount)} payment to ${nm} on ${fmtDay(e.date)}">Remove</button></li>`;
+    if (e.kind === 'off') return `<li><span class="ai ai-gold">${IC.check}</span><span class="at"><b>Paid off</b><span>${nm}</span></span><span class="av"><time datetime="${e.date}" title="${fmtDay(e.date)}">${ago(e.date)}</time></span><span></span></li>`;
+    return `<li><span class="ai ai-purple">${IC.card}</span><span class="at"><b>Account added</b><span>${nm}</span></span><span class="av"><time datetime="${e.date}" title="${fmtDay(e.date)}">${ago(e.date)}</time></span><span></span></li>`; }).join('')}</ul>`;
+}
+let whatIfAmt = 100;
+function whatIfTiles(){
+  const open = openAccounts(); if (!open.length) return '<p class="lin-empty">Every account is paid off.</p>';
+  return `<div class="wi-grid">${open.map(a => { const r = extraResult(a, whatIfAmt); const sooner = (r.d0 && r.d1) ? monthsBetween(r.d1, r.d0) : 0;
+    return `<button type="button" class="wi-tile" data-act="extraFor" data-id="${a.id}" aria-label="${esc(a.name)}: balance ${money2(a.balance)}. If you pay ${money(whatIfAmt)} extra, payoff ${sooner>0 ? 'about '+plural(sooner,'month')+' sooner' : 'about the same month'}. Open details.">
+      <span class="wi-head">${avatar(a,26,10)}<b>${esc(a.name)}</b></span>
+      <span class="wi-k">Balance</span><span class="wi-bal">${money2(a.balance)}</span>
+      <span class="wi-div"></span>
+      <span class="wi-s">If you pay ${money(whatIfAmt)} extra</span>
+      <span class="wi-s">${sooner>0 ? `Payoff ~${plural(sooner,'month')} sooner` : 'Payoff about the same month'}</span></button>`; }).join('')}</div>`;
+}
 function viewHome(){
   const t = totals(); const sim = simulate(S.accounts); const open = openAccounts();
-  const pct = t.total ? t.paid/t.total : 0; const next = open[0];
-  const toPay = Object.values(sim.firstPay).reduce((a,v)=>a+v,0), paidM = paidThisMonth();
-  const row = (ic, k, v, act='') => `<div class="lin-row"><span class="lr-k">${ic}${k}</span>${act ? `<button class="lr-v lr-btn" ${act}>${v}</button>` : `<span class="lr-v">${v}</span>`}</div>`;
-  const dot = c => `<i class="lr-dot" style="background:${c}"></i>`;
-  return `<div class="lin">
-  <header class="lin-hero">
-    <p class="lin-label">Total debt left</p>
-    <h1 class="lin-title">${money2(t.left)}</h1>
-    <p class="lin-sub">${money(t.paid)} paid of ${money(t.total)} · ${plural(open.length,'account')} to go${sim.freeDate ? ` · ${debtFree(sim.freeDate)}` : ''}</p>
-  </header>
+  const next = open[0]; const paidM = paidThisMonth(), intM = monthInterest();
+  const toPay = Object.values(sim.firstPay).reduce((a,v)=>a+v,0);
+  const st = streaks(S.payments), pace = paceProjection(S.accounts, S.payments);
+  const withApr = open.filter(a => a.apr > 0), balApr = withApr.reduce((a,x)=>a+x.balance,0);
+  const avgApr = balApr ? withApr.reduce((a,x)=>a+x.apr*x.balance,0)/balApr : null;
+  const avgPay = pace.avg || toPay;
+  const months = sim.freeDate ? monthsBetween(new Date(new Date().getFullYear(), new Date().getMonth(), 1), sim.freeDate) + 1 : null;
+  const pctN = next && next.start ? Math.max(0, Math.min(1, 1 - next.balance/next.start)) : 0;
+  const dueN = next && next.dueDay ? Math.round((nextDue(next.dueDay) - new Date(todayISO()+'T00:00'))/864e5) : null;
+  const planN = next ? (sim.firstPay[next.id] || next.min) : 0;
+  return `<div class="slayer">
+  <header class="sl-head"><h1 class="sl-title">Debt Slayer</h1><p class="sl-tag">Take control. Pay it off. Be free.</p></header>
   <div class="grid home-banners">${homeBanners()}</div>
-  <div class="lin-grid">
-    <div class="lin-main">
-      <section class="lin-panel" aria-labelledby="actT"><h2 id="actT" class="lin-h">Activity</h2>${activityHTML()}</section>
-      <div id="homeFeed" class="feed lin-feed">${homeFeedHTML()}</div>
-    </div>
-    <aside class="lin-side lin-panel" aria-label="Details">
-      <h2 class="lin-h">Details</h2>
-      ${row(dot('var(--green-bar)'), 'Debt free', sim.freeDate ? fmtMonth(sim.freeDate) + ' ›' : (open.length ? 'Add payments' : 'All paid off'), sim.freeDate ? 'data-act="toProgress"' : '')}
-      ${row(`<span class="lr-ring" style="--p:${(pct*100).toFixed(1)}"></span>`, 'Paid', `${Math.round(pct*100)}% · ${money(t.paid)}`)}
-      ${row(next ? `<span class="lr-av">${avatar(next,18,8)}</span>` : dot('var(--text3)'), 'Next target', next ? esc(next.name) + ' ›' : 'Nothing left', next ? `data-act="log" data-id="${next.id}"` : '')}
-      ${next ? row(dot('var(--accent-btn)'), 'Next payment', money2(sim.firstPay[next.id]||next.min)) : ''}
-      ${row(dot('var(--amber)'), 'This month', `${money(paidM)} of ${money(toPay)}`)}
-      ${row(dot('var(--text3)'), 'Accounts', `${open.length} open · ${S.accounts.length - open.length} paid`)}
-    </aside>
-  </div></div>`;
+  <section class="gcard sl-hero" aria-label="Total debt">
+    <div class="sl-hero-txt"><p class="g-label">Total Debt</p><p class="sl-big">${money2(t.left)}</p>
+      <p class="sl-delta">${paidM > 0 ? `<span class="pos">↓ ${money2(paidM)}</span> less than last month` : 'No payments logged this month yet'}${sim.freeDate ? ` · <button class="link-btn" data-act="toProgress">${debtFree(sim.freeDate)}</button>` : ''}</p></div>
+    ${mountainSVG(balanceHistory())}
+  </section>
+  <div class="sl-grid">
+    <section class="gcard" aria-labelledby="actT"><h2 id="actT" class="g-h">${IC.clock}Activity</h2>${activityHTML()}</section>
+    <section class="gcard sl-next" aria-labelledby="nxT"><h2 id="nxT" class="g-h">${IC.target}${next ? 'Next · ' + esc(next.name) : 'Next target'}</h2>
+      ${next ? `<p class="g-sub">This month’s payment toward ${esc(next.name)}</p>
+        <p class="sl-mid">${money2(planN)} <span class="g-sub">of ${money2(next.balance)} left</span></p>
+        <div class="bar" role="progressbar" aria-label="${esc(next.name)} paid" aria-valuenow="${Math.round(pctN*100)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${(pctN*100).toFixed(1)}%"></i></div>
+        <div class="g-row"><span>${Math.round(pctN*100)}% paid</span><span>${dueN === null ? 'No due date' : dueN <= 0 ? 'Due today' : dueN === 1 ? 'Due tomorrow' : `Due in ${dueN} days`}</span></div>
+        <button class="btn primary block pill" data-act="log" data-id="${next.id}">Pay ${money2(planN)}</button>` : `<p class="lin-empty">Nothing left to pay. You did it.</p>`}</section>
+    <section class="gcard" aria-labelledby="tmT"><h2 id="tmT" class="g-h">${IC.cal}This month summary</h2>
+      <div class="sl-sum">
+        <div><b class="pos">↓ ${money2(Math.max(0, paidM - intM))}</b><span>Debt reduced</span></div>
+        <div><b>${money2(paidM)}</b><span>Paid toward debt</span></div>
+        <div><b class="neg">${intM > 0 ? money2(intM) : '—'}</b><span>${intM > 0 ? 'Interest (est.)' : 'No interest rates'}</span></div>
+        <div><b>${st.current}</b><span>On-track ${st.current === 1 ? 'day' : 'days'}</span></div>
+      </div></section>
+    <section class="gcard" aria-labelledby="dtT"><h2 id="dtT" class="g-h">${IC.pie}Details</h2>
+      <dl class="sl-dl">
+        <div><dt>Accounts</dt><dd>${open.length} open · ${S.accounts.length - open.length} paid</dd></div>
+        <div><dt>Interest rate (avg)</dt><dd>${avgApr === null ? '—' : avgApr.toFixed(1) + '%'}</dd></div>
+        <div><dt>Monthly payment (avg)</dt><dd>${money2(avgPay)}</dd></div>
+        <div><dt>Payoff projection</dt><dd>${months ? plural(months,'month') : open.length ? '—' : 'Done'}</dd></div>
+      </dl></section>
+  </div>
+  <section class="gcard sl-whatif" aria-labelledby="simT">
+    <div class="wi-top"><h2 id="simT" class="g-h">${IC.spark}What if you paid extra?</h2>
+      <label class="wi-amt"><span>Extra per month</span><span class="wi-in">$<input id="wiIn" inputmode="decimal" value="${whatIfAmt}" aria-label="Extra payment per month for the account tiles"></span></label></div>
+    <p class="g-sub" style="margin:0 0 14px">See how extra payments could shrink each debt. Tap a tile for details.</p>
+    <div id="wiTiles">${whatIfTiles()}</div>
+    <p class="wi-note">${IC.info}<span>Estimates use your current balances and interest rates. Extra goes to principal; real results can change.</span></p>
+    <div class="wi-all"><div class="micro">All accounts together</div>
+      <div class="sim-input"><span class="mid">$</span><label class="sr-only" for="simIn">Extra per month</label><input id="simIn" inputmode="decimal" placeholder="0" value="${simExtra||''}"><span class="muted">a month</span></div>
+      <div class="chips" role="group" aria-label="Quick amounts">${[50,100,200,500].map(v=>`<button class="chip" data-extra="${v}" aria-pressed="${simExtra===v}">$${v}</button>`).join('')}<button class="chip" data-extra="0">Clear</button></div>
+      <p id="simOut" class="muted" aria-live="polite" style="margin:14px 0 0;font-size:15px"></p></div>
+  </section></div>`;
 }
 
 function simText(){
@@ -862,7 +945,8 @@ function bindView(){
     else { const o = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ e.target.classList.add('in'); o.unobserve(e.target); } }), { rootMargin:'0px 0px -8% 0px' });
       st.forEach((x,i) => { x.classList.add('reveal'); x.style.transitionDelay = (i*0.12)+'s'; o.observe(x); }); } }
   m.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', e => act(b.dataset.act, b, e)));
-  m.querySelectorAll('.lin-activity [data-rmpay]').forEach(b => b.addEventListener('click', e => askRemovePayment(b.dataset.rmpay, e.currentTarget)));
+  const wiIn = m.querySelector('#wiIn'); if (wiIn) { let tmo; wiIn.addEventListener('input', () => { clearTimeout(tmo); tmo = setTimeout(() => { whatIfAmt = Math.max(0, parseFloat(wiIn.value.replace(/[^0-9.]/g,''))||0); const box = m.querySelector('#wiTiles'); box.innerHTML = whatIfTiles(); box.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', e => act(b.dataset.act, b, e))); }, 250); }); }
+  m.querySelectorAll('.sl-act [data-rmpay]').forEach(b => b.addEventListener('click', e => askRemovePayment(b.dataset.rmpay, e.currentTarget)));
   m.querySelectorAll('[data-extra]').forEach(b => b.addEventListener('click', () => { simExtra = +b.dataset.extra; $('#simIn').value = simExtra||''; refreshSim(); }));
   const si = $('#simIn'); if (si){ si.addEventListener('input', () => { simExtra = Math.max(0, parseFloat(si.value.replace(/[^0-9.]/g,''))||0); refreshSim(); }); refreshSim(); }
   m.querySelectorAll('.chart').forEach(c => {
@@ -1001,6 +1085,18 @@ function openAccountForm(acc, trigger){
   }});
 }
 
+function acardHTML(a, sim){
+  const pct = a.start ? Math.max(0, Math.min(1, 1 - a.balance/a.start)) : 0, paid = Math.max(0, a.start - a.balance), plan = sim.firstPay[a.id] || a.min;
+  const due = a.dueDay ? Math.round((nextDue(a.dueDay) - new Date(todayISO()+'T00:00'))/864e5) : null;
+  return `<section class="acard" aria-label="${esc(a.name)} summary">
+    <div class="ac-top"><b class="ac-name">${esc(a.name)}</b>${avatar(a,34,12)}</div>
+    <p class="ac-big">${money2(a.balance)}</p><p class="ac-sub">left to pay</p>
+    <div class="ac-row"><span>Progress</span><span>${Math.round(pct*100)}%</span></div>
+    <div class="bar ac-bar" role="progressbar" aria-label="Paid" aria-valuenow="${Math.round(pct*100)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${(pct*100).toFixed(1)}%"></i></div>
+    <div class="ac-row ac-muted"><span>${money2(a.start)} total</span><span>${money2(paid)} paid</span></div>
+    <div class="ac-foot"><span class="ac-due">${IC.cal}${a.balance <= 0.004 ? 'Paid off' : due === null ? 'No due date' : due <= 0 ? 'Due today' : due === 1 ? 'Due tomorrow' : `Due in ${due} days`}</span>
+      ${a.balance > 0.004 ? `<button type="button" class="ac-pay" id="acPay">Pay ${money2(plan)} now</button>` : ''}</div></section>`;
+}
 function payHistoryHTML(a){
   const ps = S.payments.filter(p => p.accountId === a.id).sort((x,y) => y.date.localeCompare(x.date));
   return `<h3 class="micro" style="margin:18px 0 8px">Payment history</h3>${ps.length ? `<ul class="list pay-hist">${ps.map(p => `<li><span><b>${money2(p.amount)}</b> <span class="muted">${fmtDay(p.date)}</span></span><button type="button" class="btn sm rm-pay" data-rmpay="${p.id}" aria-label="Remove ${money2(p.amount)} payment on ${fmtDay(p.date)}">Remove</button></li>`).join('')}</ul>` : '<p class="small" style="margin:0">No payments logged yet.</p>'}`;
@@ -1038,7 +1134,8 @@ function openDetail(acc, trigger){
     const sim = simulate(S.accounts); const a = acc; const paid = Math.max(0, a.start - a.balance);
     const opts = Object.entries(TIERS).map(([k,t]) => { const amt = Math.max(a.min, Math.ceil(a.balance/t.months)); return `<button role="radio" aria-checked="${a.tier===k}" data-tier="${k}">${t.label}<small>${t.range} · ${money(amt)}/mo</small></button>`; }).join('');
     sh.querySelector('.sheet-body').innerHTML = `
-      <div class="row" style="margin-bottom:14px">${avatar(a,56,18)}<div><span class="pill type" style="--tc:${TYPE_COLORS[a.type]}">${esc(a.type)}</span> <span class="pill">${a.balance<=0.004?'Knocked out':paceLabel(a)}</span></div></div>
+      ${acardHTML(a, sim)}
+      <div class="row" style="margin:14px 0"><span class="pill type" style="--tc:${TYPE_COLORS[a.type]}">${esc(a.type)}</span> <span class="pill">${a.balance<=0.004?'Knocked out':paceLabel(a)}</span></div>
       <div class="stats">
         <div class="stat"><b>${money2(a.balance)}</b><span>Left to pay</span></div><div class="stat"><b>${money2(paid)}</b><span>Paid so far</span></div>
         <div class="stat"><b>${money2(a.min)}</b><span>Minimum</span></div><div class="stat"><b>${sim.payoff[a.id]?fmtMonth(sim.payoff[a.id]):a.balance<=0.004?'Paid off':'—'}</b><span>Expected payoff</span></div>
@@ -1057,6 +1154,7 @@ function openDetail(acc, trigger){
     sh.querySelectorAll('[data-tier]').forEach(b => b.addEventListener('click', () => { const k = b.dataset.tier; a.tier = a.tier===k?null:k; noteChange('changing the pace on '+a.name); render(); draw(sh); sh.querySelector(`[data-tier="${k}"]`).focus(); }));
     sh.querySelector('#clearTier')?.addEventListener('click', () => { a.tier = null; noteChange('changing the pace on '+a.name); render(); draw(sh); });
     sh.querySelector('#dLog')?.addEventListener('click', e => openLog(a, e.currentTarget));
+    sh.querySelector('#acPay')?.addEventListener('click', e => openLog(a, e.currentTarget));
     sh.querySelector('#dEdit').addEventListener('click', e => openAccountForm(a, e.currentTarget));
     sh.querySelector('#dExtra')?.addEventListener('click', e => openExtraFor(a, e.currentTarget));
     sh.querySelector('[data-close2]').addEventListener('click', closeTop);
@@ -1112,7 +1210,7 @@ function openCheck(trigger){
 function calUrl(a){
   const d = nextDue(a.dueDay); const f = x => `${x.getFullYear()}${String(x.getMonth()+1).padStart(2,'0')}${String(x.getDate()).padStart(2,'0')}`;
   const e = new Date(d); e.setDate(e.getDate()+1);
-  const p = new URLSearchParams({ action:'TEMPLATE', text:`Pay ${a.name}`, dates:`${f(d)}/${f(e)}`, details:`Debt Killer reminder: pay at least ${money2(a.min)} on ${a.name}.`, recur:`RRULE:FREQ=MONTHLY;BYMONTHDAY=${a.dueDay}` });
+  const p = new URLSearchParams({ action:'TEMPLATE', text:`Pay ${a.name}`, dates:`${f(d)}/${f(e)}`, details:`Debt Slayer reminder: pay at least ${money2(a.min)} on ${a.name}.`, recur:`RRULE:FREQ=MONTHLY;BYMONTHDAY=${a.dueDay}` });
   return 'https://calendar.google.com/calendar/render?' + p.toString();
 }
 function openCalendar(trigger){
@@ -1126,7 +1224,7 @@ function openCalendar(trigger){
 function summaryText(){
   const t = totals(), sim = simulate(S.accounts), now = new Date();
   const mp = S.payments.filter(p => monthKey(new Date(p.date+'T12:00')) === monthKey(now));
-  const lines = [`Debt Killer — ${fmtMonth(now)} summary`, '', `${money2(t.paid)} paid off so far, ${money2(t.left)} still owed.`, `This month: ${plural(mp.length,'payment')} totaling ${money2(mp.reduce((s,p)=>s+p.amount,0))}.`, sim.freeDate ? debtFree(sim.freeDate) + '.' : '', '', 'Payoff order:'];
+  const lines = [`Debt Slayer — ${fmtMonth(now)} summary`, '', `${money2(t.paid)} paid off so far, ${money2(t.left)} still owed.`, `This month: ${plural(mp.length,'payment')} totaling ${money2(mp.reduce((s,p)=>s+p.amount,0))}.`, sim.freeDate ? debtFree(sim.freeDate) + '.' : '', '', 'Payoff order:'];
   orderAll().forEach((a,i) => lines.push(`${i+1}. ${a.name} — ${a.balance<=0.004?'paid off':money2(a.balance)+' left'+(sim.payoff[a.id]?', done '+fmtMonth(sim.payoff[a.id]):'')}`));
   return lines.filter((l,i,arr)=>!(l===''&&arr[i-1]==='')).join('\n');
 }
@@ -1142,13 +1240,13 @@ function openSummary(trigger){
 
 // ---------- backup ----------
 function download(name, text, type){ const b = new Blob([text], { type }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000); }
-function exportJSON(){ download(`debt-killer-backup-${todayISO()}.json`, JSON.stringify({ app:'debt-killer', exported:new Date().toISOString(), data:S }, null, 2), 'application/json'); toast('Backup exported'); S.flags.backupTip = true; save(); if (!stack.length) render(); }
+function exportJSON(){ download(`debt-slayer-backup-${todayISO()}.json`, JSON.stringify({ app:'debt-slayer', exported:new Date().toISOString(), data:S }, null, 2), 'application/json'); toast('Backup exported'); S.flags.backupTip = true; save(); if (!stack.length) render(); }
 function exportCSV(){
   const rows = [['date','account','type','amount']].concat(S.payments.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(p => { const a = S.accounts.find(x=>x.id===p.accountId); return [p.date, a?.name||'', a?.type||'', p.amount.toFixed(2)]; }));
-  download(`debt-killer-payments-${todayISO()}.csv`, rows.map(r=>r.map(c=>/[",\n]/.test(c)?`"${String(c).replace(/"/g,'""')}"`:c).join(',')).join('\n'), 'text/csv'); toast('CSV exported');
+  download(`debt-slayer-payments-${todayISO()}.csv`, rows.map(r=>r.map(c=>/[",\n]/.test(c)?`"${String(c).replace(/"/g,'""')}"`:c).join(',')).join('\n'), 'text/csv'); toast('CSV exported');
 }
 function validBackup(obj){
-  const d = obj && obj.app === 'debt-killer' ? obj.data : obj;
+  const d = obj && (obj.app === 'debt-slayer' || obj.app === 'debt-killer') ? obj.data : obj;
   const n = normalize(d); if (!n) return null;
   const okA = n.accounts.every(a => a && typeof a.id==='string' && typeof a.name==='string' && isFinite(a.start) && isFinite(a.balance) && isFinite(a.min) && TYPES.includes(a.type));
   const okP = n.payments.every(p => p && typeof p.accountId==='string' && isFinite(p.amount) && /^\d{4}-\d{2}-\d{2}$/.test(p.date));
@@ -1158,7 +1256,7 @@ function importFile(file, trigger){
   const r = new FileReader();
   r.onload = () => { let n = null; try { n = validBackup(JSON.parse(r.result)); } catch {}
     const msg = $('#impMsg');
-    if (!n){ if (msg){ msg.hidden = false; msg.innerHTML = icon.err + '<span>That file isn’t a Debt Killer backup.</span>'; } else toast('That file isn’t a Debt Killer backup.'); return; }
+    if (!n){ if (msg){ msg.hidden = false; msg.innerHTML = icon.err + '<span>That file isn’t a Debt Slayer backup.</span>'; } else toast('That file isn’t a Debt Slayer backup.'); return; }
     if (msg) msg.hidden = true;
     confirmDialog({ title:'Replace your data?', trigger, text:`This replaces everything on this device with the backup (${plural(n.accounts.length,'account')}, ${plural(n.payments.length,'payment')}).`, ok:'Replace', onOk: () => { S = n; save(); closeAll(); render(); toast('Backup imported'); } });
   };
@@ -1172,7 +1270,7 @@ function openSettings(trigger){
    <div class="field"><label for="s_months">Default number of payments</label><select id="s_months" aria-describedby="s_months-h">${[4,5,6,7,8].map(n=>`<option value="${n}" ${s.defaultMonths===n?'selected':''}>${plural(n,'payment')}</option>`).join('')}</select>
    <div class="help" id="s_months-h">For an account with no pace set, the one you’re focused on aims to be paid off in this many monthly payments.</div></div>
    <div class="field"><span class="lbl" id="accLbl">Accent color</span>
-     <div class="swatches" role="radiogroup" aria-labelledby="accLbl">${ACCENTS.map(([k,n])=>{ const on = (s.accent||'blue')===k; return `<button type="button" role="radio" class="swatch sw-${k}" data-accent="${k}" aria-checked="${on}" aria-label="${n}" tabindex="${on?0:-1}"><i></i></button>`; }).join('')}</div>
+     <div class="swatches" role="radiogroup" aria-labelledby="accLbl">${ACCENTS.map(([k,n])=>{ const on = (s.accent||'gold')===k; return `<button type="button" role="radio" class="swatch sw-${k}" data-accent="${k}" aria-checked="${on}" aria-label="${n}" tabindex="${on?0:-1}"><i></i></button>`; }).join('')}</div>
      <div class="help">Changes buttons, links and the active tab. Category, pace and due-date colors stay the same.</div></div>
    <div class="switch"><label for="s_dark"><b>Dark mode</b></label><input type="checkbox" role="switch" id="s_dark" ${s.theme==='dark'?'checked':''} ${s.followSystem?'disabled':''}></div>
    <div class="switch"><label for="s_strike"><b>Anubis strike when you log a payment</b></label><input type="checkbox" role="switch" id="s_strike" ${s.strike!==false?'checked':''}></div>
@@ -1183,7 +1281,7 @@ function openSettings(trigger){
   <div class="toolbar"><button class="btn sm" id="expJ">Export backup</button><button class="btn sm" id="impJ">Import backup</button><button class="btn sm" id="expC">Export CSV of payments</button>
   <input type="file" id="impFile" accept="application/json,.json" hidden aria-label="Backup file"></div><div class="err" id="impMsg" hidden></div>
   <hr class="sep"><button class="btn block" id="eraseBtn" style="color:var(--red)">Erase everything</button>
-  <hr class="sep"><div class="about"><img src="logos/anubis/anubis-512.png" alt="Anubis illustration" width="72" height="72" loading="lazy"><div><h3 class="micro" style="margin:0 0 4px">About Debt Killer</h3><p class="small" style="margin:0">A debt-snowball planner that keeps everything in this browser. ${STORAGE_MSG}</p></div></div>`;
+  <hr class="sep"><div class="about"><img src="logos/anubis/anubis-512.png" alt="Anubis illustration" width="72" height="72" loading="lazy"><div><h3 class="micro" style="margin:0 0 4px">About Debt Slayer</h3><p class="small" style="margin:0">A debt-snowball planner that keeps everything in this browser. ${STORAGE_MSG}</p></div></div>`;
   openDialog({ title:'Settings', body, trigger, onMount: sh => {
     const f = sh.querySelector('form'); f.querySelector('[data-close]').addEventListener('click', closeTop);
     const prevTheme = s.theme, prevSys = s.followSystem, prevAcc = s.accent;

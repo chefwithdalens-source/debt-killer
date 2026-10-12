@@ -1,6 +1,6 @@
 {
-  "name": "Debt Killer",
-  "short_name": "Debt Killer",
+  "name": "Debt Slayer",
+  "short_name": "Debt Slayer",
   "description": "Debt-snowball planner. Your data stays in your browser.",
   "start_url": "./",
   "scope": "./",
