@@ -210,20 +210,9 @@ const icon = {
 };
 
 function viewEmpty(){
-  const shapes = [
-    ['card','<svg viewBox="0 0 120 80"><rect x="4" y="4" width="112" height="72" rx="12" fill="#8f7bff"/><rect x="4" y="20" width="112" height="14" fill="#2b1f7a"/><rect x="16" y="50" width="40" height="8" rx="4" fill="#d9d2ff"/></svg>'],
-    ['coin','<svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="36" fill="#ffd36b"/><circle cx="40" cy="40" r="26" fill="none" stroke="#c98b00" stroke-width="5"/><path d="M40 24v32M33 31h10a5 5 0 0 1 0 10h-6a5 5 0 0 0 0 10h10" stroke="#9a6400" stroke-width="5" fill="none" stroke-linecap="round"/></svg>'],
-    ['chain','<svg viewBox="0 0 120 60"><rect x="6" y="14" width="48" height="32" rx="16" fill="none" stroke="#b9c3ff" stroke-width="9"/><rect x="66" y="14" width="48" height="32" rx="16" fill="none" stroke="#b9c3ff" stroke-width="9" transform="rotate(14 90 30)"/></svg>'],
-    ['skull','<svg viewBox="0 0 80 80"><path d="M40 6C21 6 10 19 10 35c0 10 5 17 11 21v12h38V56c6-4 11-11 11-21C70 19 59 6 40 6z" fill="#e9e6ff"/><circle cx="29" cy="37" r="8" fill="#ff3b30"/><circle cx="51" cy="37" r="8" fill="#ff3b30"/></svg>'],
-    ['card2','<svg viewBox="0 0 120 80"><rect x="4" y="4" width="112" height="72" rx="12" fill="#ff6fa8"/><rect x="18" y="22" width="22" height="16" rx="3" fill="#ffe1a8"/></svg>']];
-  return `<section class="dwelcome" aria-labelledby="wTitle">
-    <canvas class="stars" aria-hidden="true"></canvas>
-    <div class="floaters" aria-hidden="true">${shapes.map(([k,svg])=>`<span class="fl fl-${k}">${svg}</span>`).join('')}</div>
+  return `<section class="dwelcome w-min" aria-labelledby="wTitle">
     <div class="w-center">
-      <div class="w-art" aria-hidden="true">
-        <picture class="w-anubis"><source type="image/webp" srcset="logos/anubis/anubis-800.webp 800w, logos/anubis/anubis-1400.webp 1400w" sizes="(min-width:700px) 560px, 100vw"><img src="logos/anubis/anubis-800.jpg" alt="" width="800" height="677" decoding="async"></picture>
-        <img class="w-logo" src="logos/app/logo-96.png" srcset="logos/app/logo-96.png 1x, logos/app/logo-192.png 2x" width="96" height="96" alt="">
-      </div>
+      <img class="w-logo" src="logos/app/logo-192.png" srcset="logos/app/logo-192.png 1x, logos/app/logo-512.png 2x" width="168" height="168" alt="Debt Slayer logo">
       <h1 id="wTitle" class="w-title">Welcome to<br>Debt <span class="w-killer">Slayer</span></h1>
       <p class="w-sub">Add each debt you owe. Debt Slayer lines them up smallest first and tells you what to pay next.</p>
     </div>

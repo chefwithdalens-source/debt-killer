@@ -1082,3 +1082,18 @@ img.logo,.sb-brand img,.w-logo{border-radius:50%!important}
 html body .dwelcome .w-title .w-killer{font-family:var(--font)!important;font-weight:900!important;text-transform:uppercase!important;font-size:1em!important;letter-spacing:inherit!important;color:#F3D27A!important;text-shadow:0 0 18px rgba(232,194,90,.45)!important}
 .mtn{height:46%;opacity:.8}
 @media (max-width:599px){.sl-act li{grid-template-columns:auto minmax(0,1fr) auto}.sl-act .la-rm{grid-column:2/4;justify-self:start;margin:-10px 0 8px;min-height:32px;padding:0}.sl-act li>span:last-child:empty{display:none}}
+/* Minimal black welcome (both themes) */
+html body .dwelcome.w-min{background:#000!important;color:#fff}
+html body .dwelcome.w-min::before,html body .dwelcome.w-min::after{display:none!important;content:none!important}
+.dwelcome.w-min .w-logo{position:static!important;transform:none!important;width:min(168px,42vw)!important;height:auto!important;aspect-ratio:1;margin:0 auto 28px;display:block;box-shadow:0 0 40px rgba(232,194,90,.18)!important;animation:none!important}
+.dwelcome.w-min .w-title{color:#fff!important;text-shadow:none!important}
+.dwelcome.w-min .w-sub,.dwelcome.w-min .w-note{color:#C7C7CC!important}
+.dwelcome.w-min .w-secondary{background:#1C1C1E!important;border:1px solid #3A3A3C!important;color:#fff!important;box-shadow:none!important}
+.dwelcome.w-min .w-primary{background:#E8C25A!important;color:#1a1200!important}
+.dwelcome.w-min .w-center,.dwelcome.w-min .w-actions{animation:wFade .7s ease-out both}
+.dwelcome.w-min .w-actions{animation-delay:.15s}
+@keyframes wFade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.dwelcome.w-min .w-center,.dwelcome.w-min .w-actions{animation:none!important}}
+body.welcome-mode{background:#000!important}body.welcome-mode .topbar,body.welcome-mode .topbar::before,body.welcome-mode .topbar::after{background:transparent!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;box-shadow:none!important;border:0!important;-webkit-mask:none!important;mask:none!important}
+body.welcome-mode .bg{background:#000!important}html body .dwelcome.w-min{-webkit-mask:none!important;mask:none!important}body.welcome-mode .topbar-inner{justify-content:flex-end!important}body.welcome-mode .topbar #settingsBtn{margin-left:auto!important}
+body.welcome-mode .topbar #settingsBtn{position:fixed!important;top:calc(10px + env(safe-area-inset-top))!important;right:calc(16px + env(safe-area-inset-right))!important;left:auto!important;margin:0!important;z-index:60}
