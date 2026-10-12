@@ -275,18 +275,6 @@ function homeFeedHTML(){
   const pct = t.total ? t.paid/t.total : 0;
   return `
   <div class="grid two feed-grid">
-    <section class="card hero span-all" aria-label="Total debt">
-      <div class="row between" style="flex-wrap:wrap;gap:10px"><span class="micro">Total debt</span>
-        ${sim.freeDate ? `<button class="badge" data-act="toProgress">${debtFree(sim.freeDate)} ›</button>` : ''}</div>
-      <div class="hero-grid">
-        <div style="flex:1;min-width:220px"><div class="big">${money(t.left)} left to pay</div>
-          <div class="bar" role="progressbar" aria-label="Debt paid" aria-valuenow="${Math.round(pct*100)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct*100}%"></i></div>
-          <div class="row between" style="margin-top:8px;font-size:14px;color:#c9c4b8"><span>${money(t.paid)} paid</span><span>${money(t.total)} total</span></div>
-          ${sim.totalInterest>0.5?`<div style="margin-top:8px;font-size:13px;color:#c9c4b8">About ${money(sim.totalInterest)} in projected interest</div>`:''}
-        </div>
-        <div>${gauge(pct, 140)}</div>
-      </div>
-    </section>
     ${next ? `<section class="card glass">
       <div class="micro">Next · ${esc(next.name)}</div>
       <div class="mid">${money2(next.balance)} left to pay</div>
@@ -374,18 +362,44 @@ function spearHTML(){
     <path d="M320 26 C350 26 372 34 396 48 C372 62 350 70 320 70 C330 60 333 36 320 26Z" fill="url(#spGlass)" stroke="url(#spEdge)" stroke-width="2.2"/>
   </svg>`;
 }
+function ago(iso){
+  const d = Math.round((new Date(todayISO()+'T12:00') - new Date(iso+'T12:00')) / 864e5);
+  return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 7 ? `${d} days ago` : d < 30 ? plural(Math.round(d/7),'week') + ' ago' : fmtDay(iso);
+}
+function activityHTML(){
+  const ps = [...S.payments].sort((x,y) => y.date.localeCompare(x.date) || 0).slice(0, 8);
+  if (!ps.length) return `<p class="lin-empty">No payments yet. Logged payments show up here.</p>`;
+  return `<ul class="lin-activity">${ps.map(p => { const a = S.accounts.find(x => x.id === p.accountId);
+    return `<li>${a ? avatar(a, 22, 9) : ''}<span class="la-t"><b>${money2(p.amount)}</b> paid to <b>${esc(a ? a.name : 'a removed account')}</b>${a && a.balance <= 0.004 ? ' <span class="la-tag">paid off</span>' : ''}</span><time class="la-time" datetime="${p.date}" title="${fmtDay(p.date)}">${ago(p.date)}</time><button type="button" class="la-rm" data-rmpay="${p.id}" aria-label="Remove ${money2(p.amount)} payment on ${fmtDay(p.date)}">Remove</button></li>`; }).join('')}</ul>`;
+}
 function viewHome(){
   const t = totals(); const sim = simulate(S.accounts); const open = openAccounts();
   const pct = t.total ? t.paid/t.total : 0; const next = open[0];
   const toPay = Object.values(sim.firstPay).reduce((a,v)=>a+v,0), paidM = paidThisMonth();
-  return `<h1 class="large-title">Home</h1>
+  const row = (ic, k, v, act='') => `<div class="lin-row"><span class="lr-k">${ic}${k}</span>${act ? `<button class="lr-v lr-btn" ${act}>${v}</button>` : `<span class="lr-v">${v}</span>`}</div>`;
+  const dot = c => `<i class="lr-dot" style="background:${c}"></i>`;
+  return `<div class="lin">
+  <header class="lin-hero">
+    <p class="lin-label">Total debt left</p>
+    <h1 class="lin-title">${money2(t.left)}</h1>
+    <p class="lin-sub">${money(t.paid)} paid of ${money(t.total)} · ${plural(open.length,'account')} to go${sim.freeDate ? ` · ${debtFree(sim.freeDate)}` : ''}</p>
+  </header>
   <div class="grid home-banners">${homeBanners()}</div>
-  <div id="homeFeed" class="feed">${homeFeedHTML()}</div>
-  <section class="home-stats" aria-label="Summary">
-    <div class="sl glass">${sim.freeDate ? `<button class="sl-btn" data-act="toProgress"><span class="sl-k">Debt Free</span><b>${fmtMonth(sim.freeDate)} ›</b><span class="sl-s">See your plan</span></button>` : `<span class="sl-k">Debt Free</span><b>${open.length ? 'Add payments to see a date' : 'All paid off'}</b>`}</div>
-    <div class="sl glass"><span class="sl-k">Paid</span><b>${Math.round(pct*100)}% · ${money(t.paid)}</b><span class="sl-s">of ${money(t.total)}</span></div>
-    ${next ? `<div class="sl glass"><button class="sl-btn" data-act="log" data-id="${next.id}"><span class="sl-k">Next Target This Month</span><b>${esc(next.name)}</b><span class="sl-s">Pay ${money2(sim.firstPay[next.id]||next.min)} · ${money(paidM)} of ${money(toPay)} paid this month ›</span></button></div>` : `<div class="sl glass"><span class="sl-k">Next Target This Month</span><b>Nothing left</b></div>`}
-  </section>`;
+  <div class="lin-grid">
+    <div class="lin-main">
+      <section class="lin-panel" aria-labelledby="actT"><h2 id="actT" class="lin-h">Activity</h2>${activityHTML()}</section>
+      <div id="homeFeed" class="feed lin-feed">${homeFeedHTML()}</div>
+    </div>
+    <aside class="lin-side lin-panel" aria-label="Details">
+      <h2 class="lin-h">Details</h2>
+      ${row(dot('var(--green-bar)'), 'Debt free', sim.freeDate ? fmtMonth(sim.freeDate) + ' ›' : (open.length ? 'Add payments' : 'All paid off'), sim.freeDate ? 'data-act="toProgress"' : '')}
+      ${row(`<span class="lr-ring" style="--p:${(pct*100).toFixed(1)}"></span>`, 'Paid', `${Math.round(pct*100)}% · ${money(t.paid)}`)}
+      ${row(next ? `<span class="lr-av">${avatar(next,18,8)}</span>` : dot('var(--text3)'), 'Next target', next ? esc(next.name) + ' ›' : 'Nothing left', next ? `data-act="log" data-id="${next.id}"` : '')}
+      ${next ? row(dot('var(--accent-btn)'), 'Next payment', money2(sim.firstPay[next.id]||next.min)) : ''}
+      ${row(dot('var(--amber)'), 'This month', `${money(paidM)} of ${money(toPay)}`)}
+      ${row(dot('var(--text3)'), 'Accounts', `${open.length} open · ${S.accounts.length - open.length} paid`)}
+    </aside>
+  </div></div>`;
 }
 
 function simText(){
@@ -848,6 +862,7 @@ function bindView(){
     else { const o = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ e.target.classList.add('in'); o.unobserve(e.target); } }), { rootMargin:'0px 0px -8% 0px' });
       st.forEach((x,i) => { x.classList.add('reveal'); x.style.transitionDelay = (i*0.12)+'s'; o.observe(x); }); } }
   m.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', e => act(b.dataset.act, b, e)));
+  m.querySelectorAll('.lin-activity [data-rmpay]').forEach(b => b.addEventListener('click', e => askRemovePayment(b.dataset.rmpay, e.currentTarget)));
   m.querySelectorAll('[data-extra]').forEach(b => b.addEventListener('click', () => { simExtra = +b.dataset.extra; $('#simIn').value = simExtra||''; refreshSim(); }));
   const si = $('#simIn'); if (si){ si.addEventListener('input', () => { simExtra = Math.max(0, parseFloat(si.value.replace(/[^0-9.]/g,''))||0); refreshSim(); }); refreshSim(); }
   m.querySelectorAll('.chart').forEach(c => {
