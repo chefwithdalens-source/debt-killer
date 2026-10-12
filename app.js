@@ -285,7 +285,7 @@ function render(){
   applyTheme();
   demoBar();
   document.querySelectorAll('[data-tab]').forEach(b => b.dataset.tab === tab ? b.setAttribute('aria-current','page') : b.removeAttribute('aria-current'));
-  document.querySelector('.tabbar').style.setProperty('--ti', ['home','accounts','calendar','progress'].indexOf(tab));
+  { const ti = ['home','accounts','calendar','progress'].indexOf(tab); document.querySelector('.tabbar').style.setProperty('--ti', Math.max(0, ti)); document.querySelector('.tabbar').classList.toggle('no-active', ti < 0); }
   const m = $('#main');
   const empty = !S.accounts.length;
   document.body.classList.toggle('welcome-mode', empty);
@@ -303,7 +303,7 @@ function render(){
     document.body.prepend(hb); }
   if (!empty) stopStars();
   if (spaceMode) setTimeout(() => { const c = document.querySelector('#homeBg .sky-stars'); if (c) startStars(c); });
-  m.innerHTML = `<div class="view">${empty ? viewEmpty() : tab==='accounts' ? viewAccounts() : tab==='calendar' ? viewCalendar() : tab==='progress' ? viewProgress() : viewHome()}</div>`;
+  m.innerHTML = `<div class="view">${empty ? viewEmpty() : tab==='accounts' ? viewAccounts() : tab==='calendar' ? viewCalendar() : tab==='progress' ? viewProgress() : tab==='summary' ? viewSummary() : viewHome()}</div>`;
   updateFab();
   bindView();
 }
@@ -544,6 +544,7 @@ function viewHome(){
       <p class="sl-delta">${paidM > 0 ? `<span class="pos">↓ ${money2(paidM)}</span> less than last month` : 'No payments logged this month yet'}${sim.freeDate ? ` · <button class="link-btn" data-act="toProgress">${debtFree(sim.freeDate)}</button>` : ''}</p></div>
     ${mountainSVG(balanceHistory())}
   </section>
+  <button type="button" class="gcard sum-entry" data-act="toSummary"><span class="ai ai-gold">${IC.cal}</span><span class="at"><b>Monthly summary</b><span>Your ${fmtMonth(new Date())} recap, reminders and tips</span></span><span class="sum-go" aria-hidden="true">›</span></button>
   <div class="sl-grid">
     <section class="gcard" aria-labelledby="actT"><h2 id="actT" class="g-h">${IC.clock}Activity</h2>${activityHTML()}</section>
     <section class="gcard sl-next" aria-labelledby="nxT"><h2 id="nxT" class="g-h">${IC.target}${next ? 'Next · ' + esc(next.name) : 'Next target'}</h2>
@@ -752,6 +753,71 @@ function bindExtra(m){
 }
 
 // ---------- Per-account what-if (preview only) ----------
+let sumOffset = 0;
+function monthSummary(off){
+  const now = new Date(), y = now.getFullYear(), m = now.getMonth() + off;
+  const start = new Date(y, m, 1), end = new Date(y, m + 1, 0), sIso = isoOf(start), eIso = isoOf(end);
+  const pays = S.payments.filter(p => p.date >= sIso && p.date <= eIso);
+  const reduced = pays.reduce((a,p) => a + p.amount, 0);
+  const prevS = isoOf(new Date(y, m-1, 1)), prevE = isoOf(new Date(y, m, 0));
+  const prev = S.payments.filter(p => p.date >= prevS && p.date <= prevE).reduce((a,p) => a + p.amount, 0);
+  let onTime = 0, judged = 0;
+  pays.forEach(p => { const a = S.accounts.find(x => x.id === p.accountId); if (!a || !a.dueDay) return; judged++; const due = isoOf(new Date(y, m, Math.min(a.dueDay, dim(start.getFullYear(), start.getMonth())))); if (p.date <= due) onTime++; });
+  const startTotal = S.accounts.reduce((a,x) => a + (x.start || 0), 0);
+  const leftEnd = S.accounts.reduce((a,x) => a + Math.max(0, x.balance), 0) + S.payments.filter(p => p.date > eIso).reduce((a,p) => a + p.amount, 0);
+  const pct = startTotal ? Math.max(0, Math.min(1, 1 - leftEnd / startTotal)) : 0;
+  const paidOff = S.accounts.filter(a => a.balance <= 0.004 && pays.some(p => p.accountId === a.id) && !S.payments.some(p => p.accountId === a.id && p.date > eIso));
+  const first = [...S.accounts.map(a => a.created || todayISO()), ...S.payments.map(p => p.date)].sort()[0] || todayISO();
+  return { start, end, pays, reduced, prev, onTime, judged, pct, paidOff, canPrev: sIso > first.slice(0,8) + '01', canNext: off < 0 };
+}
+function viewSummary(){
+  const M = monthSummary(sumOffset), open = openAccounts(), sim = simulate(S.accounts);
+  const mName = fmtMonth(M.start), cur = sumOffset === 0;
+  const rng = `${M.start.toLocaleDateString('en-US',{ month:'short', day:'numeric' })} – ${M.end.toLocaleDateString('en-US',{ month:'short', day:'numeric', year:'numeric' })}`;
+  const line = !open.length ? 'Every account is paid off. You did it.' : M.pct >= .75 ? 'The finish line is in sight. Keep swinging.' : M.pct >= .5 ? 'Past halfway. Keep the momentum going.' : M.reduced > 0 ? 'You’re making progress. Keep going.' : 'Every payment counts. Let’s get one in.';
+  const n = M.pays.length;
+  const onNote = !n ? (cur ? 'No payments logged yet this month.' : 'No payments logged that month.') : M.judged === n ? (M.onTime === n ? 'All on or before the due date.' : `${M.onTime} of ${n} on or before the due date.`) : M.judged ? `${M.onTime} of ${M.judged} with due dates were on time.` : 'Add due dates to track on-time payments.';
+  const reducedNote = M.reduced > 0 ? (M.prev > 0 ? (M.reduced >= M.prev ? `Up ${money2(M.reduced - M.prev)} from the month before.` : `${money2(M.prev - M.reduced)} less than the month before.`) : 'Great start. You’re moving in the right direction.') : 'Log a payment to start the count.';
+  // reminders
+  const rem = open.map(a => ({ a, d: dueInfo(a) })).filter(x => x.d).sort((x,y) => x.d.days - y.d.days).slice(0, 3);
+  const remHTML = rem.length ? `<ul class="sum-rem">${rem.map(({a,d}) => `<li><span class="ai ai-gold">${IC.cal}</span><span class="at"><b>${esc(a.name)}</b><span>Due ${d.date.toLocaleDateString('en-US',{ month:'short', day:'numeric', year:'numeric' })} · ${money2(sim.firstPay[a.id] || a.min)}</span></span><span class="sum-days u-${d.level}">${d.level === 'overdue' ? 'Overdue' : d.days === 0 ? 'Due today' : plural(d.days, 'day') + ' left'}</span></li>`).join('')}</ul>`
+    : `<p class="lin-empty">${open.length ? 'Add due dates to your accounts to see reminders here.' : 'Nothing due. Every account is paid off.'}</p>`;
+  // takeaways
+  const tk = [];
+  if (M.reduced > 0) tk.push(`You paid down <b class="pos">${money2(M.reduced)}</b> in ${mName}.`); else tk.push(`No payments were logged in ${mName}${cur ? ' yet' : ''}.`);
+  if (n) tk.push(`You made <b>${plural(n,'payment')}</b>${M.judged === n && M.onTime === n ? ', all on time. Consistency is key.' : '.'}`);
+  if (M.paidOff.length) tk.push(`You knocked out ${M.paidOff.map(a => `<b>${esc(a.name)}</b>`).join(', ')}.`);
+  else if (sim.freeDate) tk.push(`At this pace you’ll be ${debtFree(sim.freeDate).replace(/^D/,'d')}, and you’re <b>${Math.round(M.pct*100)}%</b> of the way there.`);
+  // recommendations
+  const rc = []; const nx = open[0];
+  if (nx) { const r = extraResult(nx, 50); const sooner = (r.d0 && r.d1) ? monthsBetween(r.d1, r.d0) : 0;
+    rc.push(sooner > 0 ? `Paying <b>$50 more</b> toward ${esc(nx.name)} pays it off about <b>${plural(sooner,'month')} sooner</b>${r.saved > 1 ? ` and saves about ${money(r.saved)} in interest` : ''}.` : `Paying <b>$50 more</b> toward ${esc(nx.name)} speeds up its payoff. Try it in What if.`); }
+  if (open.length) { const w = simulate(S.accounts, { extra:100 }); const sooner = (sim.freeDate && w.freeDate) ? monthsBetween(w.freeDate, sim.freeDate) : 0; const saved = sim.totalInterest - w.totalInterest;
+    if (sooner > 0) rc.push(`An extra <b>$100 a month</b> across your plan makes you debt-free about <b>${plural(sooner,'month')} sooner</b>${saved > 1 ? `, saving about ${money(saved)} in interest` : ''}.`); }
+  const soon = rem.find(x => x.d.days <= 7);
+  if (soon) rc.push(`Pay <b>${esc(soon.a.name)}</b> before ${soon.d.date.toLocaleDateString('en-US',{ month:'short', day:'numeric' })} to stay on time.`);
+  else if (open.length && !open.some(a => a.apr > 0)) rc.push('Add interest rates to your accounts for sharper payoff estimates.');
+  else rc.push('Stay consistent. Every payment gets you closer to debt-free.');
+  const check = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/></svg>';
+  return `<div class="summary">
+  <header class="sum-head"><img src="logos/app/logo-96.png" srcset="logos/app/logo-96.png 1x, logos/app/logo-192.png 2x" width="56" height="56" alt=""><div><h1 class="sum-title">Monthly Summary</h1><p class="sl-tag">${line}</p></div></header>
+  <section class="gcard" aria-labelledby="msT">
+    <div class="sum-bar"><h2 id="msT" class="g-h" style="margin:0">${IC.cal}${mName}</h2>
+      <div class="sum-pick"><button type="button" class="icon-btn sm" data-act="sumPrev" aria-label="Previous month" ${M.canPrev ? '' : 'disabled'}>‹</button><span class="sum-rng">${rng}</span><button type="button" class="icon-btn sm" data-act="sumNext" aria-label="Next month" ${M.canNext ? '' : 'disabled'}>›</button></div></div>
+    <div class="sum-stats">
+      <div><p class="micro">Total debt reduced</p><p class="sum-big pos">${money2(M.reduced)}</p><p class="g-sub">${reducedNote}</p></div>
+      <div><p class="micro">Payments made</p><p class="sum-big">${n}</p><p class="g-sub">${onNote}</p></div>
+    </div>
+    <div class="g-row" style="margin:18px 0 8px"><span class="micro">Progress toward debt-free</span><b class="acc-txt">${Math.round(M.pct*100)}%</b></div>
+    <div class="bar sum-prog" role="progressbar" aria-label="Progress toward debt-free" aria-valuenow="${Math.round(M.pct*100)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${(M.pct*100).toFixed(1)}%"></i></div>
+  </section>
+  <section class="gcard" aria-labelledby="rmT"><h2 id="rmT" class="g-h"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/></svg>Reminders</h2>${remHTML}</section>
+  <section class="gcard" aria-labelledby="ktT"><h2 id="ktT" class="g-h"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 17l6-6 4 4 7-7.5M15 7.5h5.5V13"/></svg>Key takeaways</h2><ul class="sum-bul">${tk.slice(0,3).map(x => `<li>${x}</li>`).join('')}</ul></section>
+  <section class="gcard" aria-labelledby="rcT"><h2 id="rcT" class="g-h"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>Recommendations</h2>
+    <ul class="sum-rec">${rc.slice(0,3).map(x => `<li>${check}<span>${x}</span></li>`).join('')}</ul>
+    <button type="button" class="link-btn sum-dash" data-act="toHome">View full dashboard →</button></section>
+</div>`;
+}
 function extraResult(acc, amt){
   const base = simulate(S.accounts), w = simulate(S.accounts, { extraFor:{ id:acc.id, amount:amt } });
   const months = r => { const d = r.payoff[acc.id]; return d ? monthsBetween(new Date(new Date().getFullYear(), new Date().getMonth(), 1), d) + 1 : null; };
@@ -993,6 +1059,9 @@ function insightsHTML(sim){
   </div>`;
 }
 function viewProgress(){
+  return progressInner().replace('<div class="grid three">', `<button type="button" class="gcard sum-entry" data-act="toSummary" style="margin:0 0 16px"><span class="ai ai-gold">${IC.cal}</span><span class="at"><b>Monthly summary</b><span>See this month’s recap, reminders and tips</span></span><span class="sum-go" aria-hidden="true">›</span></button><div class="grid three">`);
+}
+function progressInner(){
   const t = totals(); const sim = simulate(S.accounts); const knocked = S.accounts.filter(a=>a.balance<=0.004).length;
   const single = S.accounts.length === 1;
   const noPay = !S.payments.length;
@@ -1066,6 +1135,10 @@ function act(a, el){
   switch(a){
     case 'add': return openAccountForm(null, el);
     case 'toProgress': return go('progress');
+    case 'toSummary': sumOffset = 0; return go('summary');
+    case 'toHome': return go('home');
+    case 'sumPrev': sumOffset--; return render();
+    case 'sumNext': sumOffset = Math.min(0, sumOffset+1); return render();
     case 'dismissBanner': S.banner = null; save(); return render();
     case 'dismissTip': S.flags.backupTip = true; save(); return render();
     case 'export': return exportJSON();
