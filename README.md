@@ -49,3 +49,22 @@ Home opens with your total debt left, followed by the next target, this month's 
 - **Logo:** a gold line-art Anubis head in a gold circle, cropped from the owner-supplied artwork, upscaled and sharpened (`logos/app/master.png`; every icon size is built from it). The skull mark is retired as the primary logo.
 - **Look:** navy-charcoal frosted glass in dark mode, white with light frosted cards in light mode, with **Gold** as the default accent (still changeable in Settings). Green means paid or progress; red means interest.
 - **Home:** a Total Debt hero with a balance sparkline, Activity, Next target, This month summary, Details, and a What-if grid with one tile per account. iPad and desktop get a left icon rail.
+
+## Try the demo
+Open **https://chefwithdalens-source.github.io/debt-killer/?demo=1** (or tap **Try the demo** on the welcome screen). The demo loads clearly fake sample accounts from `demo-data.js`. It is marked DEMO with a banner, lives only in that browser tab (sessionStorage), is never written to localStorage or the cloud, and has **Reset** and **Exit demo** buttons. Your own data on that device is never touched.
+
+## Cross-device sync (optional, Supabase)
+Debt Slayer works fully offline with no account. If `config.js` has Supabase credentials, **Settings → Sync across devices** (and the welcome screen) offers email magic-link sign-in. While signed in, your data syncs to one private row per user; localStorage stays as the offline cache.
+
+- **First sign-in on a device:** if the cloud has data and this device is empty, the cloud copy is loaded. If both have different data, you choose which to keep (the newer one is the default). If only this device has data, it is uploaded.
+- **After that:** changes upload a moment after you make them, and the app checks for newer data when you come back to the tab.
+- **Sign out:** choose to keep the data on this device or remove it. The cloud copy stays.
+
+### Setup
+1. Create a Supabase project. In **SQL Editor**, run `supabase/schema.sql`. It creates the `user_state` table with Row Level Security so each user can only read and write their own row.
+2. **Authentication → Sign In / Providers → Email:** enable it. Magic links need no password.
+3. **Authentication → URL Configuration:** set **Site URL** to `https://chefwithdalens-source.github.io/debt-killer/` and add the same URL under **Redirect URLs**.
+4. **Project Settings → API:** copy the **Project URL** and the **anon public** key into `config.js`. The anon key is public by design; never put the `service_role` key in this repo.
+5. Optional: under **Authentication → Emails → SMTP**, set up your own email sender. The built-in one is rate-limited to a few emails per hour.
+
+supabase-js is loaded only when `config.js` is filled in, from jsDelivr, pinned to version 2.117.3 with a Subresource Integrity hash.

@@ -78,7 +78,11 @@ function detectType(name){
 
 // ---------- state ----------
 const blank = () => ({ v:1, accounts:[], payments:[], settings:{ budget:null, defaultMonths:6, theme:'light', followSystem:false }, flags:{ backupTip:false }, lastFree:null, banner:null });
-let S = load();
+// ---------- demo mode (memory + sessionStorage only; never localStorage or cloud) ----------
+const DEMO_KEY = 'debt-slayer:demo';
+let DEMO = (() => { try { return new URLSearchParams(location.search).get('demo') === '1' || sessionStorage.getItem(DEMO_KEY) !== null; } catch { return false; } })();
+function demoState(){ try { const r = sessionStorage.getItem(DEMO_KEY); if (r) { const n = normalize(JSON.parse(r)); if (n) return n; } } catch {} return normalize(window.DS_DEMO ? window.DS_DEMO() : blank()); }
+let S = DEMO ? null : load();
 function load(){
   try { const raw = localStorage.getItem(KEY); if (!raw) return blank(); const d = JSON.parse(raw); return normalize(d) || blank(); } catch { return blank(); }
 }
@@ -90,8 +94,108 @@ function normalize(d){
 const UIKEY = 'debt-killer:ui';
 let UI = (() => { try { return JSON.parse(localStorage.getItem(UIKEY)) || {}; } catch { return {}; } })();
 UI.open = UI.open || {}; UI.expanded = UI.expanded || {};
-function saveUI(){ try { localStorage.setItem(UIKEY, JSON.stringify(UI)); } catch {} }
-function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
+if (DEMO) { S = demoState(); try { sessionStorage.setItem(DEMO_KEY, JSON.stringify(S)); } catch {} }
+function saveUI(){ if (DEMO) return; try { localStorage.setItem(UIKEY, JSON.stringify(UI)); } catch {} }
+function save(){
+  if (DEMO) { try { sessionStorage.setItem(DEMO_KEY, JSON.stringify(S)); } catch {} return; }
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {}
+  if (SYNC) SYNC.changed();
+}
+function setDemoURL(on){ try { const u = new URL(location.href); on ? u.searchParams.set('demo','1') : u.searchParams.delete('demo'); history.replaceState(null, '', u); } catch {} }
+function startDemo(){ DEMO = true; try { sessionStorage.removeItem(DEMO_KEY); } catch {} S = demoState(); save(); setDemoURL(true); tab = 'home'; closeAll(); render(); toast('Demo loaded. Nothing you do here is saved.'); }
+function resetDemo(){ try { sessionStorage.removeItem(DEMO_KEY); } catch {} S = demoState(); save(); closeAll(); render(); toast('Demo reset'); }
+function exitDemo(){ DEMO = false; try { sessionStorage.removeItem(DEMO_KEY); } catch {} setDemoURL(false); S = load(); tab = 'home'; closeAll(); render(); initSync(); }
+function demoBar(){
+  let b = document.getElementById('demoBar');
+  if (!DEMO) { b?.remove(); document.body.classList.remove('demo-mode'); return; }
+  document.body.classList.add('demo-mode');
+  if (b) return;
+  b = document.createElement('div'); b.id = 'demoBar'; b.className = 'demo-bar'; b.setAttribute('role','region'); b.setAttribute('aria-label','Demo mode');
+  b.innerHTML = `<span class="demo-tag">DEMO</span><span class="demo-txt">Sample data. Nothing is saved.</span><button type="button" class="demo-btn" id="demoReset">Reset</button><button type="button" class="demo-btn" id="demoExit">Exit demo</button>`;
+  document.body.prepend(b);
+  b.querySelector('#demoReset').addEventListener('click', resetDemo);
+  b.querySelector('#demoExit').addEventListener('click', exitDemo);
+}
+
+// ---------- cross-device sync (Supabase; off unless config.js has credentials) ----------
+let SYNC = null, syncStatus = 'off';
+const SB_SRC = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js';
+const SB_SRI = 'sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R';
+function syncConfigured(){ const c = window.DS_CONFIG || {}; return !!(window.__DS_MOCK_CLIENT || (c.supabaseUrl && c.supabaseAnonKey)); }
+function initSync(){
+  if (SYNC || DEMO || !syncConfigured() || !window.DSync) return;
+  const boot = client => {
+    SYNC = DSync.createSync({ client, storage: localStorage, getState: () => S,
+      applyState: d => { S = normalize(d) || blank(); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} render(); },
+      ask: askMerge, onStatus: (st) => { syncStatus = st; document.querySelectorAll('[data-sync-status]').forEach(el => el.textContent = syncStatusText()); } });
+    window.__DS_SYNC = SYNC; SYNC.start();
+  };
+  if (window.__DS_MOCK_CLIENT) return boot(window.__DS_MOCK_CLIENT);
+  const c = window.DS_CONFIG, sc = document.createElement('script');
+  sc.src = SB_SRC; sc.integrity = SB_SRI; sc.crossOrigin = 'anonymous';
+  sc.onload = () => boot(window.supabase.createClient(c.supabaseUrl, c.supabaseAnonKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'implicit' } }));
+  sc.onerror = () => { syncStatus = 'error'; };
+  document.head.appendChild(sc);
+}
+function syncStatusText(){
+  const m = SYNC ? SYNC.readMeta() : {};
+  return { off:'Not signed in', signedOut:'Not signed in', syncing:'Syncing…', pending:'Changes waiting to sync…', error:'Couldn’t reach the sync server. Your data is safe on this device.',
+    synced: m.lastSynced ? `Synced ${new Date(m.lastSynced).toLocaleString('en-US',{ month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}` : 'Synced' }[syncStatus] || '';
+}
+function askMerge({ prefer, localAt, cloudAt }){
+  return new Promise(resolve => {
+    const when = t => t ? new Date(t).toLocaleString('en-US',{ month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) : 'unknown';
+    let done = false; const fin = v => { if (done) return; done = true; resolve(v); closeTop(); };
+    const btn = (k, label, t) => `<button type="button" class="btn ${prefer===k?'primary':''} block" data-pick="${k}" style="margin-bottom:10px">${label}<br><span class="small">Last changed ${when(t)}${prefer===k?' · newer':''}</span></button>`;
+    openDialog({ title:'Which data should we keep?', body:`<p class="muted" style="margin-top:0">This device and your cloud copy are different. Pick one; the other is replaced.</p>
+      ${prefer==='cloud' ? btn('cloud','Keep the cloud copy',cloudAt) + btn('local','Keep this device’s copy',localAt) : btn('local','Keep this device’s copy',localAt) + btn('cloud','Keep the cloud copy',cloudAt)}`,
+      onMount: sh => {
+        sh.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => fin(b.dataset.pick)));
+        const bd = stack[stack.length-1].el; new MutationObserver((_, mo) => { if (!bd.isConnected) { mo.disconnect(); if (!done) { done = true; resolve(prefer); } } }).observe(document.body, { childList:true, subtree:true });
+      } });
+  });
+}
+function syncSectionHTML(){
+  if (DEMO) return `<h3 class="micro">Sync across devices</h3><p class="small" style="margin:6px 0 10px">Sync is off in the demo. <button type="button" class="link-btn" id="syncExitDemo">Exit demo</button> to use your own data.</p>`;
+  if (!syncConfigured()) return `<h3 class="micro">Sync across devices</h3><p class="small" style="margin:6px 0 10px">Sync isn’t set up for this copy of Debt Slayer yet.</p>`;
+  const u = SYNC && SYNC.user;
+  return `<h3 class="micro" id="syncH">Sync across devices</h3>` + (u
+    ? `<p class="small" style="margin:6px 0 4px">Signed in as <b>${esc(u.email||'')}</b></p><p class="small" data-sync-status aria-live="polite" style="margin:0 0 10px">${syncStatusText()}</p>
+       <div class="toolbar"><button class="btn sm" id="syncNow">Sync now</button><button class="btn sm" id="syncOut">Sign out</button></div>`
+    : `<p class="small" style="margin:6px 0 10px">Sign in with a link sent to your email to keep your data in sync on every device.</p>${magicFormHTML()}`);
+}
+function magicFormHTML(){
+  return `<form class="magic" id="magicForm" novalidate><label class="sr-only" for="magicEmail">Email</label>
+    <input id="magicEmail" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required>
+    <button type="submit" class="btn primary sm">Email me a sign-in link</button><p class="small" id="magicMsg" aria-live="polite" style="margin:8px 0 0"></p></form>`;
+}
+function bindMagic(root){
+  const f = root.querySelector('#magicForm'); if (!f) return;
+  f.addEventListener('submit', async e => {
+    e.preventDefault(); const em = f.querySelector('#magicEmail').value.trim(), msg = f.querySelector('#magicMsg');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { msg.textContent = 'Enter a valid email address.'; f.querySelector('#magicEmail').focus(); return; }
+    if (!SYNC) { msg.textContent = 'Sync is still loading. Try again in a moment.'; return; }
+    msg.textContent = 'Sending…';
+    try { await SYNC.signIn(em, location.origin + location.pathname); msg.textContent = `Check ${em} for a sign-in link. Open it on this device.`; }
+    catch (err) { msg.textContent = 'Couldn’t send the link: ' + (err && err.message || 'try again'); }
+  });
+}
+function bindSyncSection(sh, rerender){
+  bindMagic(sh);
+  sh.querySelector('#syncExitDemo')?.addEventListener('click', exitDemo);
+  sh.querySelector('#syncNow')?.addEventListener('click', async () => { try { await SYNC.flush(); const pulled = await SYNC.refresh(); if (!pulled) { SYNC.changed(); await SYNC.flush(); } toast('Synced'); } catch { toast('Couldn’t sync right now'); } });
+  sh.querySelector('#syncOut')?.addEventListener('click', e => {
+    openDialog({ title:'Sign out', trigger:e.currentTarget, body:`<p class="muted" style="margin-top:0">Your cloud copy stays safe. What should happen to the data on this device?</p>
+      <button type="button" class="btn block" id="outKeep" style="margin-bottom:10px">Keep it on this device</button><button type="button" class="btn block" id="outClear" style="color:var(--red)">Remove it from this device</button>`,
+      onMount: d => {
+        d.querySelector('#outKeep').addEventListener('click', async () => { await SYNC.signOut(); closeAll(); render(); toast('Signed out. Data kept on this device.'); });
+        d.querySelector('#outClear').addEventListener('click', async () => { await SYNC.signOut(); localStorage.removeItem(KEY); localStorage.removeItem(DSync.META); S = blank(); tab = 'home'; closeAll(); render(); toast('Signed out and removed from this device'); });
+      } });
+  });
+}
+function openSyncSheet(trigger){
+  openDialog({ title:'Sync across devices', trigger, body: syncSectionHTML().replace(/<h3[^>]*>Sync across devices<\/h3>/, ''), onMount: sh => bindSyncSection(sh) });
+}
 
 // ---------- payoff engine ----------
 function tierMonths(a){ return a.tier ? TIERS[a.tier].months : null; }
@@ -179,6 +283,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyThe
 
 function render(){
   applyTheme();
+  demoBar();
   document.querySelectorAll('[data-tab]').forEach(b => b.dataset.tab === tab ? b.setAttribute('aria-current','page') : b.removeAttribute('aria-current'));
   document.querySelector('.tabbar').style.setProperty('--ti', ['home','accounts','calendar','progress'].indexOf(tab));
   const m = $('#main');
@@ -219,6 +324,7 @@ function viewEmpty(){
     <div class="w-actions">
       <button class="w-btn w-primary" data-act="add">Add your first account</button>
       <button class="w-btn w-secondary" id="wImport">Import a backup</button>
+      <div class="w-alt"><button type="button" class="w-link" id="wDemo">Try the demo</button>${syncConfigured() ? '<span aria-hidden="true">·</span><button type="button" class="w-link" id="wSync">Sync across devices</button>' : ''}</div>
       <input type="file" id="wImpFile" accept="application/json,.json" hidden aria-label="Backup file">
       <p class="w-note">${STORAGE_MSG}</p>
     </div></section>`;
@@ -921,6 +1027,8 @@ function viewProgress(){
 
 function bindView(){
   const cv = document.querySelector('.dwelcome .stars'); if (cv) startStars(cv);
+  document.getElementById('wDemo')?.addEventListener('click', startDemo);
+  document.getElementById('wSync')?.addEventListener('click', e => openSyncSheet(e.currentTarget));
   const wi = document.getElementById('wImport');
   if (wi) { const f = document.getElementById('wImpFile'); wi.addEventListener('click', () => f.click()); f.addEventListener('change', e => { const file = e.target.files[0]; if (file) importFile(file, wi); e.target.value = ''; }); }
   const m = $('#main');
@@ -1266,7 +1374,8 @@ function openSettings(trigger){
    <div class="switch"><label for="s_sys"><b>Match system appearance</b></label><input type="checkbox" role="switch" id="s_sys" ${s.followSystem?'checked':''}></div>
    <div class="form-actions"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn primary">Save changes</button></div>
   </form><hr class="sep">
-  <h3 class="micro">Backup</h3><p class="small" style="margin:6px 0 10px">${STORAGE_MSG}</p>
+  <section id="syncSec">${syncSectionHTML()}</section><hr class="sep">
+  <h3 class="micro">Backup</h3><p class="small" style="margin:6px 0 10px">${DEMO ? 'Demo data lives only in this tab.' : STORAGE_MSG}</p>
   <div class="toolbar"><button class="btn sm" id="expJ">Export backup</button><button class="btn sm" id="impJ">Import backup</button><button class="btn sm" id="expC">Export CSV of payments</button>
   <input type="file" id="impFile" accept="application/json,.json" hidden aria-label="Backup file"></div><div class="err" id="impMsg" hidden></div>
   <hr class="sep"><button class="btn block" id="eraseBtn" style="color:var(--red)">Erase everything</button>
@@ -1286,11 +1395,12 @@ function openSettings(trigger){
       s.budget = b || null; s.defaultMonths = +f.s_months.value; s.strike = f.s_strike.checked; sh._saved = true; noteChange('updating settings'); closeAll(); render(); toast('Settings saved'); });
     sh.querySelector('#expJ').addEventListener('click', exportJSON);
     sh.querySelector('#expC').addEventListener('click', exportCSV);
+    bindSyncSection(sh);
     sh.querySelector('#impJ').addEventListener('click', () => sh.querySelector('#impFile').click());
     sh.querySelector('#impFile').addEventListener('change', e => { const file = e.target.files[0]; if (file) importFile(file, sh.querySelector('#impJ')); e.target.value = ''; });
     sh.querySelector('#eraseBtn').addEventListener('click', e => confirmDialog({ title:'Are you sure?', trigger:e.currentTarget, text:'This deletes all accounts and payments on this device. This can’t be undone.', ok:'Erase everything',
       extra:'<p class="small" style="margin:0 0 12px">Want a copy first? <button type="button" class="link-btn" id="expFirst">Export a backup</button></p>',
-      onOk:() => { localStorage.removeItem(KEY); localStorage.removeItem(UIKEY); UI = {open:{},expanded:{}}; S = blank(); simExtra = 0; tab = 'home'; closeAll(); render(); toast('Everything erased'); } }));
+      onOk:() => { if (DEMO) { exitDemo(); return; } localStorage.removeItem(KEY); localStorage.removeItem(UIKEY); UI = {open:{},expanded:{}}; S = blank(); simExtra = 0; tab = 'home'; closeAll(); render(); toast('Everything erased'); } }));
   }});
   // revert unsaved theme preview if closed without saving
   const entry = stack[stack.length-1]; const sheet = entry.el.querySelector('.sheet');
@@ -1298,4 +1408,5 @@ function openSettings(trigger){
 }
 
 render();
+initSync();
 })();

@@ -1097,3 +1097,16 @@ html body .dwelcome.w-min::before,html body .dwelcome.w-min::after{display:none!
 body.welcome-mode{background:#000!important}body.welcome-mode .topbar,body.welcome-mode .topbar::before,body.welcome-mode .topbar::after{background:transparent!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;box-shadow:none!important;border:0!important;-webkit-mask:none!important;mask:none!important}
 body.welcome-mode .bg{background:#000!important}html body .dwelcome.w-min{-webkit-mask:none!important;mask:none!important}body.welcome-mode .topbar-inner{justify-content:flex-end!important}body.welcome-mode .topbar #settingsBtn{margin-left:auto!important}
 body.welcome-mode .topbar #settingsBtn{position:fixed!important;top:calc(10px + env(safe-area-inset-top))!important;right:calc(16px + env(safe-area-inset-right))!important;left:auto!important;margin:0!important;z-index:60}
+/* demo mode */
+.demo-bar{position:fixed;top:0;left:0;right:0;z-index:80;display:flex;align-items:center;gap:10px;padding:calc(6px + env(safe-area-inset-top)) 14px 6px;background:#E8C25A;color:#1a1200;font-size:14px;font-weight:600}
+.demo-tag{background:#1a1200;color:#E8C25A;border-radius:6px;padding:2px 8px;font-size:12px;letter-spacing:.08em}
+.demo-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.demo-btn{border:1px solid rgba(26,18,0,.35);background:rgba(255,255,255,.35);color:#1a1200;font:600 13px var(--font);border-radius:999px;padding:6px 12px;min-height:32px;cursor:pointer}
+body.demo-mode{padding-top:46px}
+@media (min-width:768px){body.demo-mode .sidebar{top:46px}}
+/* welcome extra options + magic link form */
+.w-alt{display:flex;justify-content:center;align-items:center;gap:10px;color:#8E8E93;margin-top:4px}
+.w-link{background:none;border:0;color:#E8C25A;font:600 15px var(--font);padding:10px 6px;min-height:44px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.magic{display:flex;flex-wrap:wrap;gap:10px}
+.magic input{flex:1 1 220px;min-height:44px;border-radius:12px;border:1px solid var(--hair);background:var(--fill);color:var(--text);padding:0 12px;font:16px var(--font)}
+.magic .small{flex-basis:100%}
