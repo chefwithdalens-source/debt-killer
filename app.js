@@ -102,7 +102,15 @@ let DEMO = (() => { try { return new URLSearchParams(location.search).get('demo'
 function demoState(){ try { const r = sessionStorage.getItem(DEMO_KEY); if (r) { const n = normalize(JSON.parse(r)); if (n) return n; } } catch {} return normalize(window.DS_DEMO ? window.DS_DEMO() : blank()); }
 let S = DEMO ? null : load();
 function load(){
-  try { const raw = localStorage.getItem(KEY); if (!raw) return blank(); const d = JSON.parse(raw); return normalize(d) || blank(); } catch { return blank(); }
+  try {
+    const raw = localStorage.getItem(KEY); if (!raw) return blank();
+    const d = JSON.parse(raw);
+    const n = normalize(d); if (!n) return blank();
+    const settings = d.settings || {};
+    const legacy = d.v !== 2 || !Object.prototype.hasOwnProperty.call(settings, 'accelerateFocus');
+    if (legacy) { try { localStorage.setItem(KEY, JSON.stringify(n)); } catch {} }
+    return n;
+  } catch { return blank(); }
 }
 function normalize(d){
   if (!d || typeof d !== 'object' || !Array.isArray(d.accounts) || !Array.isArray(d.payments)) return null;
@@ -342,7 +350,7 @@ const orderAll = () => [...openAccounts(), ...S.accounts.filter(a=>a.balance<=0.
 const totals = () => { const left = S.accounts.reduce((s,a)=>s+a.balance,0); const total = S.accounts.reduce((s,a)=>s+Math.max(a.start,a.balance),0); return { left, total, paid: Math.max(0,total-left) }; };
 function paidInMonth(offset){ const d = new Date(); const target = new Date(d.getFullYear(), d.getMonth()+offset, 1); const k = monthKey(target); return S.payments.filter(p=>monthKey(new Date(p.date+'T12:00'))===k).reduce((s,p)=>s+p.amount,0); }
 function paidThisMonth(){ return paidInMonth(0); }
-function paceLabel(a){ return a.tier ? TIERS[a.tier].label + ' pace' : 'Snowball pace'; }
+function paceLabel(a){ return a.tier ? TIERS[a.tier].label + ' pace' : 'Minimum'; }
 function monthStamp(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`; }
 function parseMonthStamp(s){
   if (!s) return null;
@@ -738,7 +746,7 @@ function miniRing(pct, color){ const R=11, C=2*Math.PI*R, p=Math.max(0,Math.min(
 function tile(a, rank, sim){
   const done = a.balance <= 0.004; const pct = a.start ? 1 - a.balance/a.start : 1;
   const d = dueInfo(a);
-  const label = `${a.name}. ${done?'Paid off':money2(a.balance)+' left'}. ${done?'':(STRAT[S.settings.strategy]?.label || 'Plan')+' number '+rank+'. '}${done?'':(a.apr?a.apr+'% APR. ':'No APR. ')+'Minimum '+money2(a.min)+'. '}${a.tier?TIERS[a.tier].label+' pace':'Snowball pace'}. ${d?(d.full||d.text):'No due date'}.`;
+  const label = `${a.name}. ${done?'Paid off':money2(a.balance)+' left'}. ${done?'':(STRAT[S.settings.strategy]?.label || 'Plan')+' number '+rank+'. '}${done?'':(a.apr?a.apr+'% APR. ':'No APR. ')+'Minimum '+money2(a.min)+'. '}${paceLabel(a)}. ${d?(d.full||d.text):'No due date'}.`;
   return `<button class="acct tile glass ${a.tier&&!done?'t-'+a.tier:''} ${done?'t-done':''}" data-act="detail" data-id="${a.id}" aria-label="${esc(label)}">
     <div class="tile-top">${avatar(a,36,13)}<span style="flex:1"></span>${miniRing(pct, done?'var(--green-bar)':CAT[a.type].strong)}${done?'<span class="rank rank-done" aria-hidden="true">✓</span>':`<span class="rank" aria-hidden="true">#${rank}</span>`}</div>
     <div class="name">${esc(a.name)}</div>
@@ -1057,7 +1065,7 @@ function lineChart(accts, id){
     ${aP.length>1?`<path d="${area(aP)}" fill="url(#ga${id})"/><path d="${monotonePath(aP)}" fill="none" class="line-glow" style="stroke:var(--green-bar);--glow:var(--green-glow)" stroke-width="3" stroke-linecap="round"/>`:''}
     ${dots.map(p=>`<circle cx="${x(+p.date)}" cy="${y(p.total)}" r="9" fill="transparent" data-tip="${p.k} · ${fmtMonShort(p.date)} · ${money(p.total)}"/>`).join('')}
   </svg><div class="tip-box"></div>
-  <div class="legend"><span><i style="background:var(--green-bar)"></i>Actual paid down</span><span><i style="background:var(--blue)"></i>Projected plan (dashed)</span></div>
+  <div class="legend"><span><i style="background:var(--green-bar)"></i>Balance from logged payments</span><span><i style="background:var(--blue)"></i>Projected plan (dashed)</span></div>
   <p class="sr-only">${esc(desc)}</p></div>`;
 }
 function barChart(accts){
@@ -1236,15 +1244,15 @@ function planResultsHTML(){
   <p class="small">Interest saved is versus paying each minimum on its own, with no rollover. ${cmp.minimumsOnly.never ? '' : `Minimums alone would cost about ${money(cmp.minimumsOnly.totalInterest)} in interest.`}</p>
   <section class="gcard" aria-labelledby="moT"><h2 id="moT" class="g-h">This month</h2>
     ${first ? `<p class="g-sub" style="margin-bottom:8px">Planned out the door: <b>${money2(first.payment)}</b>${first.unapplied > 0.5 ? ` · ${money2(first.unapplied)} of the windfall is more than you owe` : ''}</p>
-    <div class="table-scroll"><table class="amort"><caption class="sr-only">Planned payment this month</caption><thead><tr><th scope="col">Debt</th><th scope="col">Payment</th><th scope="col">Interest</th><th scope="col">Principal</th><th scope="col">Left after</th></tr></thead><tbody>
-    ${first.rows.map(r => `<tr><th scope="row">${esc(r.name)}</th><td>${money2(r.payment)}</td><td>${money2(r.interest)}</td><td class="${r.principal<0?'neg':''}">${money2(r.principal)}</td><td>${money2(r.balance)}</td></tr>`).join('')}
+    <div class="table-scroll"><table class="amort"><caption class="sr-only">Planned payment this month</caption><thead><tr><th scope="col">Debt</th><th scope="col" title="Payment">Pay</th><th scope="col">Interest</th><th scope="col" title="Principal">Principal</th><th scope="col" title="Balance left after the payment">Left</th></tr></thead><tbody>
+    ${first.rows.map(r => `<tr><th scope="row">${esc(r.name)}</th><td data-label="Pay">${money2(r.payment)}</td><td data-label="Interest">${money2(r.interest)}</td><td data-label="Principal" class="${r.principal<0?'neg':''}">${money2(r.principal)}</td><td data-label="Left">${money2(r.balance)}</td></tr>`).join('')}
     </tbody></table></div>` : '<p class="lin-empty">Nothing to pay.</p>'}
   </section>
   <section class="gcard" aria-labelledby="scT"><h2 id="scT" class="g-h">Month-by-month schedule</h2>
     <div class="field"><label for="schedAcct">Show</label><select id="schedAcct"><option value="">All debts</option>${open.map(a => `<option value="${esc(a.id)}" ${planFilter===a.id?'selected':''}>${esc(a.name)}</option>`).join('')}</select></div>
     <div class="table-scroll" id="schedTable" tabindex="0" role="region" aria-label="Amortization schedule"><table class="amort"><caption class="sr-only">${planFilter ? 'Schedule for one debt' : 'Schedule for every debt'}. Interest is charged, then the payment is applied.</caption>
-      <thead><tr><th scope="col">Month</th><th scope="col">Payment</th><th scope="col">Interest</th><th scope="col">Principal</th><th scope="col">Balance left</th></tr></thead><tbody>
-      ${shown.map(m => { const row = planFilter ? m.rows[0] : null; const payment = row ? row.payment : m.payment; const interest = row ? row.interest : m.interest; const principal = row ? row.principal : m.principal; const balance = row ? row.balance : m.balance; return `<tr><th scope="row">${fmtMonth(m.date)}</th><td>${money2(payment)}</td><td>${money2(interest)}</td><td class="${principal<0?'neg':''}">${money2(principal)}</td><td>${money2(balance)}</td></tr>`; }).join('')}
+      <thead><tr><th scope="col">Month</th><th scope="col" title="Payment">Pay</th><th scope="col">Interest</th><th scope="col" title="Principal">Principal</th><th scope="col" title="Balance left">Left</th></tr></thead><tbody>
+      ${shown.map(m => { const row = planFilter ? m.rows[0] : null; const payment = row ? row.payment : m.payment; const interest = row ? row.interest : m.interest; const principal = row ? row.principal : m.principal; const balance = row ? row.balance : m.balance; return `<tr><th scope="row">${fmtMonth(m.date)}</th><td data-label="Pay">${money2(payment)}</td><td data-label="Interest">${money2(interest)}</td><td data-label="Principal" class="${principal<0?'neg':''}">${money2(principal)}</td><td data-label="Left">${money2(balance)}</td></tr>`; }).join('')}
       </tbody></table></div>
     ${filtered.length > cap ? `<button type="button" class="btn sm" id="showAllSched" style="margin-top:10px">Show ${Math.min(filtered.length, 240)} months</button>` : filtered.length > 18 ? `<p class="small">Showing ${shown.length} of ${filtered.length} months.</p>` : ''}
     <p class="small">The model starts this month and doesn’t use the due day. A logged payment still lowers the balance you stored; it does not split interest for you.</p>
@@ -1641,8 +1649,8 @@ function openDetail(acc, trigger){
       ${payHistoryHTML(a)}
       <h3 class="micro" style="margin:18px 0 8px">Payoff pace</h3>
       <div class="segmented" role="radiogroup" aria-label="Payoff pace">${opts}</div>
-      <p class="muted" style="margin:10px 0 0">${a.tier?`Aims to clear it in about ${plural(TIERS[a.tier].months,'month')}: ${money2(Math.max(a.min,Math.ceil(a.balance/TIERS[a.tier].months)))} a month, plus anything rolled over.`:'No pace set. It pays the minimum and waits its turn in the snowball. Pick a pace to give it a deadline.'}
-      ${a.tier?' <button class="link-btn" id="clearTier">Back to snowball pace</button>':''}</p>
+      <p class="muted" style="margin:10px 0 0">${a.tier?`Aims to clear it in about ${plural(TIERS[a.tier].months,'month')}: ${money2(Math.max(a.min,Math.ceil(a.balance/TIERS[a.tier].months)))} a month, plus anything rolled over.`:`No pace set. It pays the minimum until the ${(STRAT[S.settings.strategy]?.label || 'snowball').toLowerCase()} plan sends extra its way. Pick a pace to give it a deadline.`}
+      ${a.tier?' <button class="link-btn" id="clearTier">Clear this pace</button>':''}</p>
       <div class="actions">${a.balance>0.004?'<button class="btn primary block" id="dLog">Log a payment</button>':''}<button class="btn block" id="dEdit">Edit account</button>${a.balance>0.004?'<button class="btn block" id="dExtra">What if I pay extra?</button>':''}
       ${a.dueDay?`<a class="btn block" href="${calUrl(a)}" target="_blank" rel="noopener">Add monthly reminder to Google Calendar</a>`:'<p class="small" style="margin:0;text-align:center">Set a due day to add a calendar reminder.</p>'}
       <button class="btn block" data-close2>Close</button></div>`;

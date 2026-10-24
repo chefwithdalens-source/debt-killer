@@ -1150,7 +1150,8 @@ body.demo-mode{padding-top:46px}
 .skip{position:absolute;left:12px;top:-48px;z-index:100;background:var(--accent-btn);color:var(--accent-ink);padding:10px 14px;border-radius:10px;font-weight:700;text-decoration:none}
 .skip:focus{top:12px}
 .tile-facts{margin-top:2px;font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.plan{max-width:880px;margin:0 auto;display:grid;gap:16px}
+.plan{max-width:880px;margin:0 auto;display:grid;gap:16px;min-width:0}
+.plan > *, #planResults, #planResults > *{min-width:0;max-width:100%}
 .plan-cols{display:grid;gap:12px}
 @media (min-width:640px){.plan-cols{grid-template-columns:1fr 1fr}}
 .switch label .small{display:block;font-weight:400;color:var(--text2);margin-top:2px}
@@ -1183,6 +1184,14 @@ body.demo-mode{padding-top:46px}
 .amort{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
 .amort th,.amort td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--hair);white-space:nowrap}
 .amort th[scope=row],.amort th:first-child{text-align:left;position:sticky;left:0;background:var(--card-solid)}
+@media (max-width:520px){
+  .amort,.amort thead,.amort tbody,.amort tr,.amort th,.amort td{display:block}
+  .amort thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .amort tr{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;padding:10px 0;border-bottom:1px solid var(--hair)}
+  .amort th[scope=row]{grid-column:1 / -1;position:static;background:transparent;padding:0 0 2px;white-space:normal}
+  .amort td{text-align:left;padding:2px 0;white-space:normal}
+  .amort td::before{content:attr(data-label);display:block;font-size:11px;font-weight:600;color:var(--text2)}
+}
 .amort thead th{font-size:12px;color:var(--text2);font-weight:600}
 @media (max-width:420px){
   .tab{font-size:11px;min-height:56px;padding-left:2px;padding-right:2px}
