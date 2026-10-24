@@ -6,6 +6,8 @@
 // Every open debt is paid its planned amount (minimum, or a higher floor).
 // Dollars left over — including a paid-off debt's planned amount — roll to the
 // next debt in that order. A one-time windfall is added in the first month only.
+// A due day does not change the interest math. It places that debt's payment,
+// and its payoff date, on that day of the month (the 1st when no due day is set).
 (function (root) {
   'use strict';
 
@@ -74,6 +76,151 @@
     return new Date(start.getFullYear(), start.getMonth() + i, 1);
   }
 
+  // The 1st when the debt has no due day. Day 31 in a short month clamps to the last day.
+  function dueOnDate(monthDate, dueDay) {
+    const y = monthDate.getFullYear(), m = monthDate.getMonth();
+    if (!(dueDay >= 1)) return new Date(y, m, 1);
+    const last = new Date(y, m + 1, 0).getDate();
+    return new Date(y, m, Math.min(dueDay, last));
+  }
+
+  function parseISODate(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+    if (!m) return null;
+    return new Date(+m[1], +m[2] - 1, +m[3]);
+  }
+
+  function isoDate(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function daysBetween(from, to) {
+    if (!(from instanceof Date) || !(to instanceof Date) || isNaN(from) || isNaN(to)) return 0;
+    const utc = d => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+    return Math.round((utc(to) - utc(from)) / 86400000);
+  }
+
+  // Interest between two dates. A 30-day gap matches monthlyInterest (balance × APR / 12, to the cent).
+  function accruedInterest(balance, apr, from, to) {
+    const days = daysBetween(from, to);
+    if (days <= 0 || !(Number(balance) > 0) || !(Number(apr) > 0)) return 0;
+    const monthly = Math.round(toCents(balance) * (Number(apr) || 0) / 1200);
+    return Math.round(monthly * days / 30) / 100;
+  }
+
+  // interest is what accrued; principal is payment − interest (negative when the payment doesn't cover it).
+  // balanceAfter = balance + interest − payment, floored at 0.
+  function splitPayment(balance, apr, amount, from, to) {
+    const bal = Math.max(0, Number(balance) || 0);
+    const pay = Math.max(0, Number(amount) || 0);
+    const interest = accruedInterest(bal, apr, from, to);
+    const raw = bal + interest - pay;
+    if (raw <= 0.004) {
+      const owed = roundCents(bal + interest);
+      const applied = Math.min(pay, owed);
+      return { interest, principal: roundCents(applied - interest), balanceAfter: 0, unapplied: roundCents(pay - applied) };
+    }
+    return { interest, principal: roundCents(pay - interest), balanceAfter: roundCents(raw), unapplied: 0 };
+  }
+
+  // Fill interest and principal on payments that don't have them yet.
+  // Legacy payments already reduced the stored balance by the full amount, so this
+  // does not change account.balance. principal + interest = amount.
+  function annotatePayments(accounts, payments) {
+    const byAcct = new Map((accounts || []).map(a => [a.id, a]));
+    const list = (payments || []).map(p => ({ ...p }));
+    const grouped = new Map();
+    list.forEach(p => {
+      if (!p || p.accountId == null) return;
+      if (!grouped.has(p.accountId)) grouped.set(p.accountId, []);
+      grouped.get(p.accountId).push(p);
+    });
+    grouped.forEach((pays, id) => {
+      const a = byAcct.get(id);
+      pays.sort((x, y) => String(x.date).localeCompare(String(y.date)) || String(x.id || '').localeCompare(String(y.id || '')));
+      if (!a) {
+        pays.forEach(p => {
+          if (typeof p.interest !== 'number' || typeof p.principal !== 'number') {
+            p.interest = 0;
+            p.principal = roundCents(p.amount);
+            p.legacy = true;
+          }
+        });
+        return;
+      }
+      let bal = Math.max(0, Number(a.start) || Number(a.balance) || 0);
+      let prev = parseISODate(a.created) || parseISODate(pays[0].date) || new Date();
+      pays.forEach(p => {
+        const when = parseISODate(p.date) || prev;
+        if (typeof p.interest !== 'number' || typeof p.principal !== 'number') {
+          const interest = accruedInterest(bal, a.apr || 0, prev, when);
+          p.interest = interest;
+          p.principal = roundCents((Number(p.amount) || 0) - interest);
+          p.legacy = true;
+        }
+        if (p.legacy !== false && p.balanceAfter == null) bal = roundCents(Math.max(0, bal - (Number(p.amount) || 0)));
+        else if (typeof p.balanceAfter === 'number') bal = p.balanceAfter;
+        else bal = roundCents(Math.max(0, bal + (Number(p.interest) || 0) - (Number(p.amount) || 0)));
+        prev = when;
+      });
+    });
+    return list;
+  }
+
+  // Balance over time. Interest on a legacy payment is a same-day rise; the balance
+  // then drops by the full payment, which is what older saves already did.
+  // A new payment (legacy === false, with balanceAfter) drops the balance by principal only,
+  // after interest was added. Manual edits are applied on their date.
+  // The series ends on the stored balance, so an unrecorded edit doesn't leave a gap.
+  function history(accounts, payments, adjustments, today) {
+    const todayD = today instanceof Date && !isNaN(today) ? today : new Date();
+    const todayISO = isoDate(todayD);
+    const ann = annotatePayments(accounts, payments);
+    const adj = adjustments || [];
+    return (accounts || []).map(a => {
+      const mineP = ann.filter(p => p.accountId === a.id);
+      const mineA = adj.filter(x => x && x.accountId === a.id && x.date);
+      const created = a.created || (mineP[0] && mineP[0].date) || todayISO;
+      let bal = roundCents(Math.max(0, Number(a.start) || 0));
+      const points = [{ date: created, balance: bal, kind: 'open' }];
+      const events = [
+        ...mineP.map((p, i) => ({ ...p, kind: 'payment', _i: i })),
+        ...mineA.map((x, i) => ({ ...x, kind: 'edit', _i: mineP.length + i })),
+      ].sort((x, y) => String(x.date).localeCompare(String(y.date))
+        || (x.kind === y.kind ? 0 : x.kind === 'payment' ? -1 : 1)
+        || x._i - y._i);
+      events.forEach(ev => {
+        if (ev.kind === 'edit') {
+          bal = roundCents(Math.max(0, Number(ev.balance) || 0));
+          points.push({ date: ev.date, balance: bal, kind: 'edit' });
+          return;
+        }
+        const interest = Number(ev.interest) || 0;
+        if (interest > 0.004) points.push({ date: ev.date, balance: roundCents(bal + interest), kind: 'interest', interest });
+        if (ev.legacy !== false && ev.balanceAfter == null) bal = roundCents(Math.max(0, bal - (Number(ev.amount) || 0)));
+        else if (typeof ev.balanceAfter === 'number') bal = ev.balanceAfter;
+        else bal = roundCents(Math.max(0, bal + interest - (Number(ev.amount) || 0)));
+        points.push({
+          date: ev.date, balance: bal, kind: 'payment', interest,
+          principal: Number(ev.principal) || 0, amount: Number(ev.amount) || 0,
+        });
+      });
+      const current = roundCents(Math.max(0, Number(a.balance) || 0));
+      if (Math.abs(bal - current) > 0.009) points.push({ date: todayISO, balance: current, kind: 'reconcile' });
+      return { id: a.id, points };
+    });
+  }
+
+  function balanceAsOf(series, iso) {
+    let total = 0;
+    (series || []).forEach(s => {
+      let bal = 0;
+      (s.points || []).forEach(p => { if (String(p.date) <= String(iso)) bal = p.balance; });
+      total += bal;
+    });
+    return roundCents(total);
+  }
+
   function project(debts, opts) {
     opts = opts || {};
     const useCents = opts.round !== false;
@@ -90,7 +237,8 @@
     const spec = raw.map(d => {
       const min = Math.max(0, Number(d.min) || 0);
       const floor = floors[d.id] != null ? Math.max(0, Number(floors[d.id])) : min;
-      return { id: d.id, name: d.name || '', apr: Number(d.apr) || 0, min, floorU: toU(floor), balU: toU(d.balance) };
+      const dueDay = Number(d.dueDay) >= 1 ? Math.min(31, Math.round(Number(d.dueDay))) : null;
+      return { id: d.id, name: d.name || '', apr: Number(d.apr) || 0, min, dueDay, floorU: toU(floor), balU: toU(d.balance) };
     });
     const orderedIds = sortDebts(spec.map(d => ({ id: d.id, name: d.name, apr: d.apr, balance: fromU(d.balU) })), opts.strategy, opts.customOrder).map(d => d.id);
     const empty = {
@@ -156,19 +304,21 @@
         const payment = pays[d.id] || 0;
         const principal = payment - interestPart;
         d.balU -= payment;
+        const due = dueOnDate(date, d.dueDay);
         if (d.balU <= (useCents ? 0.5 : 1e-6)) {
           d.balU = 0;
-          if (!payoff[d.id]) payoff[d.id] = date;
+          if (!payoff[d.id]) payoff[d.id] = due;
         }
         if (m === 0) firstPay[d.id] = fromU(payment);
         paymentU += payment;
         interestRowU += interestPart;
         principalU += principal;
         rows.push({
-          id: d.id, name: d.name, interest: fromU(interestPart), payment: fromU(payment),
+          id: d.id, name: d.name, dueDay: d.dueDay, due, interest: fromU(interestPart), payment: fromU(payment),
           principal: fromU(principal), balance: fromU(d.balU),
         });
       });
+      rows.sort((a, b) => (a.due - b.due) || ordered.findIndex(d => d.id === a.id) - ordered.findIndex(d => d.id === b.id));
       spec.forEach(d => {
         balanceU += d.balU;
         if (m === 0 && firstPay[d.id] == null) firstPay[d.id] = 0;
@@ -183,12 +333,14 @@
 
     const still = spec.some(d => d.balU > eps);
     Object.keys(interest).forEach(id => { interest[id] = fromU(interest[id]); });
+    let free = null;
+    Object.keys(payoff).forEach(id => { if (!free || payoff[id] > free) free = payoff[id]; });
     return {
       schedule, payoff, interest, firstPay,
       totalInterest: fromU(totalInterestU),
       totalPaid: fromU(totalPaidU),
       months: schedule.length,
-      freeDate: still || !schedule.length ? null : schedule[schedule.length - 1].date,
+      freeDate: still || !schedule.length ? null : free,
       stuck: still,
       alreadyFree: false,
       orderedIds,
@@ -244,6 +396,7 @@
 
   const api = {
     STRATEGIES, toCents, roundCents, monthlyInterest, sortDebts, plannedFloors, project, minimumsOnly, compare,
+    dueOnDate, accruedInterest, splitPayment, annotatePayments, history, balanceAsOf,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.DebtEngine = api;

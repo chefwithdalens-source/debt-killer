@@ -35,7 +35,7 @@ const uid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(3
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const monthKey = d => `${d.getFullYear()}-${d.getMonth()}`;
 const addMonths = (d, n) => new Date(d.getFullYear(), d.getMonth()+n, 1);
-const fmtMonth = d => `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+const fmtMonth = d => d && d.getDate() > 1 ? d.toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' }) : `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 const fmtMonShort = d => `${MON[d.getMonth()]} ${d.getFullYear()}`;
 const debtFree = d => d ? `Debt free by ${fmtMonth(d)}` : 'Debt free date unknown';
 const ordinal = n => n + (n%100>=11&&n%100<=13 ? 'th' : ({1:'st',2:'nd',3:'rd'}[n%10] || 'th'));
@@ -90,7 +90,7 @@ function detectType(name){
 }
 
 // ---------- state ----------
-const blank = () => ({ v:2, accounts:[], payments:[], settings:{ budget:null, defaultMonths:6, theme:'light', followSystem:false, accent:'gold', strike:true, strategy:'snowball', customOrder:[], income:null, expenses:[], useCashFlow:false, accelerateFocus:false, extraMonthly:0, windfall:0 }, flags:{ backupTip:false }, lastFree:null, banner:null });
+const blank = () => ({ v:3, accounts:[], payments:[], adjustments:[], settings:{ budget:null, defaultMonths:6, theme:'light', followSystem:false, accent:'gold', strike:true, strategy:'snowball', customOrder:[], income:null, expenses:[], useCashFlow:false, accelerateFocus:false, extraMonthly:0, windfall:0 }, flags:{ backupTip:false }, lastFree:null, banner:null });
 function storageMsg(){
   if (DEMO) return 'Demo data lives only in this tab.';
   if (typeof syncConfigured === 'function' && syncConfigured()) return 'Saved on this device, and in your private cloud copy while you are signed in. Export a backup anytime.';
@@ -107,7 +107,8 @@ function load(){
     const d = JSON.parse(raw);
     const n = normalize(d); if (!n) return blank();
     const settings = d.settings || {};
-    const legacy = d.v !== 2 || !Object.prototype.hasOwnProperty.call(settings, 'accelerateFocus');
+    const payLegacy = (d.payments || []).some(p => !p || typeof p.interest !== 'number' || typeof p.principal !== 'number');
+    const legacy = d.v !== 3 || !Object.prototype.hasOwnProperty.call(settings, 'accelerateFocus') || payLegacy || !Array.isArray(d.adjustments);
     if (legacy) { try { localStorage.setItem(KEY, JSON.stringify(n)); } catch {} }
     return n;
   } catch { return blank(); }
@@ -127,10 +128,18 @@ function normalize(d){
     name: String(e.name).slice(0, 80),
     amount: nonNeg(e.amount),
   })) : [];
+  const adjustments = Array.isArray(d.adjustments) ? d.adjustments.filter(x => x && typeof x.accountId === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.date) && isFinite(+x.balance)).map(x => ({
+    id: typeof x.id === 'string' && x.id ? x.id : uid(),
+    accountId: x.accountId,
+    date: x.date,
+    balance: Math.round(+x.balance * 100) / 100,
+    previous: isFinite(+x.previous) ? Math.round(+x.previous * 100) / 100 : null,
+  })) : [];
   return {
-    v: 2,
+    v: 3,
     accounts: d.accounts,
-    payments: d.payments,
+    payments: DebtEngine.annotatePayments(d.accounts, d.payments),
+    adjustments,
     settings: {
       budget: numOrNull(s.budget),
       defaultMonths: [4,5,6,7,8].includes(+s.defaultMonths) ? +s.defaultMonths : 6,
@@ -191,7 +200,7 @@ function initSync(){
   if (window.__DS_MOCK_CLIENT) return boot(window.__DS_MOCK_CLIENT);
   const c = window.DS_CONFIG, sc = document.createElement('script');
   sc.src = SB_SRC; sc.integrity = SB_SRI; sc.crossOrigin = 'anonymous';
-  sc.onload = () => boot(window.supabase.createClient(c.supabaseUrl, c.supabaseAnonKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'implicit' } }));
+  sc.onload = () => boot(window.supabase.createClient(c.supabaseUrl, c.supabaseAnonKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } }));
   sc.onerror = () => { syncStatus = 'error'; };
   document.head.appendChild(sc);
 }
@@ -260,6 +269,7 @@ function engineDebts(accts){
   return (accts || []).map(a => ({
     id: a.id, name: a.name, balance: a.balance, apr: a.apr || 0, min: a.min || 0,
     tierMonths: a.tier && TIERS[a.tier] ? TIERS[a.tier].months : null,
+    dueDay: a.dueDay || null,
   }));
 }
 function cashFlow(settings){
@@ -379,6 +389,7 @@ let planShowAll = false, planFilter = '';
 function go(t){ tab = t; render(); $('#main').focus({preventScroll:true}); window.scrollTo(0,0); }
 document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => go(b.dataset.tab)));
 $('#settingsBtn').addEventListener('click', e => openSettings(e.currentTarget));
+$('#sbSettings')?.addEventListener('click', e => openSettings(e.currentTarget));
 $('#fab').addEventListener('click', e => openAccountForm(null, e.currentTarget));
 $('#headerAdd').addEventListener('click', e => openAccountForm(null, e.currentTarget));
 
@@ -583,10 +594,17 @@ function ago(iso){
   const d = Math.round((new Date(todayISO()+'T12:00') - new Date(iso+'T12:00')) / 864e5);
   return d <= 0 ? 'Today' : d === 1 ? 'Yesterday' : d < 7 ? `${d} days ago` : new Date(iso+'T12:00').toLocaleDateString('en-US',{ month:'short', day:'numeric' });
 }
+function ledgerSeries(accts){
+  const list = accts || S.accounts;
+  const ids = new Set(list.map(a => a.id));
+  return DebtEngine.history(list, S.payments.filter(p => ids.has(p.accountId)), (S.adjustments || []).filter(a => ids.has(a.accountId)), new Date());
+}
 function balanceHistory(n = 7){
-  const left = totals().left, now = new Date(), out = [];
-  for (let i = n-1; i >= 0; i--){ const end = new Date(now.getFullYear(), now.getMonth()-i+1, 0); const iso = isoOf(end);
-    out.push(i === 0 ? left : left + S.payments.filter(p => p.date > iso).reduce((a,p)=>a+p.amount,0)); }
+  const series = ledgerSeries(), left = totals().left, now = new Date(), out = [];
+  for (let i = n-1; i >= 0; i--){
+    const end = new Date(now.getFullYear(), now.getMonth()-i+1, 0);
+    out.push(i === 0 ? left : DebtEngine.balanceAsOf(series, isoOf(end)));
+  }
   return out;
 }
 function mountainSVG(vals){
@@ -609,7 +627,7 @@ function activityHTML(){
   if (!ev.length) return `<p class="lin-empty">No activity yet. Payments and new accounts show up here.</p>`;
   return `<ul class="sl-act">${ev.map(e => {
     const nm = esc(e.a ? e.a.name : 'a removed account');
-    if (e.kind === 'pay') return `<li><span class="ai ai-green">${IC.down}</span><span class="at"><b>Payment made</b><span>${nm}</span></span><span class="av"><b class="neg">−${money2(e.p.amount)}</b><time datetime="${e.date}" title="${fmtDay(e.date)}">${ago(e.date)}</time></span><button type="button" class="la-rm" data-rmpay="${e.p.id}" aria-label="Remove ${money2(e.p.amount)} payment to ${nm} on ${fmtDay(e.date)}">Remove</button></li>`;
+    if (e.kind === 'pay') return `<li><span class="ai ai-green">${IC.down}</span><span class="at"><b>Payment made</b><span>${nm}${e.p.interest > 0.004 ? ` · ${money2(e.p.interest)} interest` : ''}</span></span><span class="av"><b class="neg">−${money2(e.p.amount)}</b><time datetime="${e.date}" title="${fmtDay(e.date)}">${ago(e.date)}</time></span><button type="button" class="la-rm" data-rmpay="${e.p.id}" aria-label="Remove ${money2(e.p.amount)} payment to ${nm} on ${fmtDay(e.date)}">Remove</button></li>`;
     if (e.kind === 'off') return `<li><span class="ai ai-gold">${IC.check}</span><span class="at"><b>Paid off</b><span>${nm}</span></span><span class="av"><time datetime="${e.date}" title="${fmtDay(e.date)}">${ago(e.date)}</time></span><span></span></li>`;
     return `<li><span class="ai ai-purple">${IC.card}</span><span class="at"><b>Account added</b><span>${nm}</span></span><span class="av"><time datetime="${e.date}" title="${fmtDay(e.date)}">${ago(e.date)}</time></span><span></span></li>`; }).join('')}</ul>`;
 }
@@ -803,22 +821,29 @@ function duesInMonth(y, m){
   openAccounts().forEach(a => { if (!a.dueDay) return; const d = dueOn(y, m, a.dueDay).getDate(); (map[d] = map[d] || []).push(a); });
   return map;
 }
+let calFocus = null;
+const WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 function viewCalendar(){
   const y = calMonth.getFullYear(), m = calMonth.getMonth(); const t = midnight(new Date());
   const map = duesInMonth(y, m); const first = new Date(y, m, 1).getDay(); const days = dim(y, m);
   const sim = simulate(S.accounts);
-  let cells = '';
-  for (let i=0;i<first;i++) cells += '<div class="cal-cell blank" aria-hidden="true"></div>';
-  for (let d=1; d<=days; d++){
+  const focusDay = calFocus && calFocus.y === y && calFocus.m === m ? Math.min(calFocus.d, days) : (y === t.getFullYear() && m === t.getMonth() ? t.getDate() : 1);
+  const weeks = []; let row = Array(first).fill(null);
+  for (let d=1; d<=days; d++){ row.push(d); if (row.length === 7){ weeks.push(row); row = []; } }
+  if (row.length){ while (row.length < 7) row.push(null); weeks.push(row); }
+  const cell = d => {
+    if (!d) return '<div role="gridcell" class="cal-cell blank"></div>';
     const date = new Date(y, m, d); const list = map[d] || []; const isToday = +date === +t;
-    const urg = list.map(a=>dueInfo(a)).filter(x=>x && +x.date===+date || (x && x.level==='overdue' && +x.date===+date));
-    const lvl = urg.some(x=>x.level==='overdue') ? 'overdue' : urg.some(x=>x.level==='today') ? 'today' : '';
-    const label = `${MONTHS[m]} ${d}${isToday?', today':''}${list.length?`, ${plural(list.length,'payment')} due: ${list.map(a=>a.name).join(', ')}`:''}${lvl==='overdue'?', overdue':lvl==='today'?', due today':''}`;
-    const inner = `<span class="cal-num">${d}</span>${lvl?`<span class="cal-flag flag-${lvl}" aria-hidden="true">${lvl==='overdue'?'!':'•'}</span>`:''}
-      <span class="cal-dots" aria-hidden="true">${list.slice(0,4).map(a=>`<i style="background:${CAT[a.type].strong};--c:${CAT[a.type].strong}"></i>`).join('')}</span>
-      <span class="cal-pills" aria-hidden="true">${list.slice(0,3).map(a=>`<span class="cal-pill" style="--cat:${CAT[a.type].strong}">${avatar(a,16,8)}<span>${esc(a.name)}</span></span>`).join('')}${list.length>3?`<span class="small">+${list.length-3} more</span>`:''}</span>`;
-    cells += list.length ? `<button class="cal-cell has ${isToday?'today':''} ${lvl?'u-'+lvl:''}" data-act="calDay" data-day="${d}" aria-label="${esc(label)}">${inner}</button>` : `<div class="cal-cell ${isToday?'today':''}" aria-label="${esc(label)}" role="gridcell">${inner}</div>`;
-  }
+    const urg = list.map(a => dueInfo(a)).filter(x => x && (+x.date === +date));
+    const lvl = urg.some(x => x.level === 'overdue') ? 'overdue' : urg.some(x => x.level === 'today') ? 'today' : '';
+    const label = `${WEEKDAYS[date.getDay()]}, ${MONTHS[m]} ${d}${isToday ? ', today' : ''}${list.length ? `, ${plural(list.length, 'payment')} due: ${list.map(a => a.name).join(', ')}` : ', no payments due'}${lvl === 'overdue' ? ', overdue' : lvl === 'today' ? ', due today' : ''}`;
+    const inner = `<span class="cal-num">${d}</span>${lvl ? `<span class="cal-flag flag-${lvl}" aria-hidden="true">${lvl === 'overdue' ? '!' : '•'}</span>` : ''}
+      <span class="cal-dots" aria-hidden="true">${list.slice(0, 4).map(a => `<i style="background:${CAT[a.type].strong};--c:${CAT[a.type].strong}"></i>`).join('')}</span>
+      <span class="cal-pills" aria-hidden="true">${list.slice(0, 3).map(a => `<span class="cal-pill" style="--cat:${CAT[a.type].strong}">${avatar(a, 16, 8)}<span>${esc(a.name)}</span></span>`).join('')}${list.length > 3 ? `<span class="small">+${list.length - 3} more</span>` : ''}</span>`;
+    return `<div role="gridcell" class="cal-cell ${list.length ? 'has' : ''} ${isToday ? 'today' : ''} ${lvl ? 'u-' + lvl : ''}" tabindex="${d === focusDay ? 0 : -1}" data-day="${d}" aria-selected="${d === focusDay ? 'true' : 'false'}" ${isToday ? 'aria-current="date"' : ''} aria-label="${esc(label)}">${inner}</div>`;
+  };
+  const grid = `<div role="row" class="cal-dow">${WEEKDAYS.map(n => `<div role="columnheader">${n.slice(0, 3)}<span class="sr-only">${n.slice(3)}</span></div>`).join('')}</div>`
+    + weeks.map(week => `<div role="row">${week.map(cell).join('')}</div>`).join('');
   // upcoming 7 days (plus overdue)
   const up = openAccounts().map(a=>({a,d:dueInfo(a)})).filter(x=>x.d && (x.d.level!=='later')).sort((x,y)=>URGENCY_ORDER[x.d.level]-URGENCY_ORDER[y.d.level]||x.d.date-y.d.date);
   const cats = [...new Set(openAccounts().filter(a=>a.dueDay).map(a=>a.type))];
@@ -826,8 +851,8 @@ function viewCalendar(){
   <section class="card glass cal">
     <div class="cal-head"><h2 class="mid" style="margin:0" aria-live="polite">${MONTHS[m]} ${y}</h2>
       <div class="row" style="gap:6px"><button class="icon-btn" data-act="calPrev" aria-label="Previous month">‹</button><button class="btn sm" data-act="calToday">Today</button><button class="icon-btn" data-act="calNext" aria-label="Next month">›</button></div></div>
-    <div class="cal-grid cal-dow" aria-hidden="true">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(x=>`<div>${x}</div>`).join('')}</div>
-    <div class="cal-grid" role="grid" aria-label="${MONTHS[m]} ${y}">${cells}</div>
+    <p class="sr-only" id="calHelp">Arrow keys move between days. Home and End move to the start and end of the week. Page Up and Page Down change month. Enter opens a day that has a payment due.</p>
+    <div class="cal-grid" role="grid" aria-readonly="true" aria-labelledby="calHelp" aria-label="${MONTHS[m]} ${y}" data-cal-grid aria-rowcount="${weeks.length + 1}" aria-colcount="7">${grid}</div>
     <div class="legend" style="margin-top:12px">${cats.map(c=>`<span class="cat-chip" style="--cat:${CAT[c].strong}"><i></i>${CAT[c].label}</span>`).join('')}<span><span class="cal-flag flag-today static">•</span> Due today</span><span><span class="cal-flag flag-overdue static">!</span> Overdue</span></div>
   </section>
   <section class="card glass" style="margin-top:14px"><h2 class="micro">Upcoming · next 7 days</h2>
@@ -854,8 +879,61 @@ function bindExtra(m){
   m.querySelectorAll('[data-act=calPrev],[data-act=calNext],[data-act=calToday]').forEach(b => b.addEventListener('click', () => {
     const a = b.dataset.act; const n = new Date();
     calMonth = a==='calToday' ? new Date(n.getFullYear(), n.getMonth(), 1) : addMonths(calMonth, a==='calPrev'?-1:1);
+    if (a === 'calToday') calFocus = { y: calMonth.getFullYear(), m: calMonth.getMonth(), d: n.getDate() };
     render(); document.querySelector(`[data-act=${a}]`)?.focus(); }));
-  m.querySelectorAll('[data-act=calDay]').forEach(b => b.addEventListener('click', () => openDay(+b.dataset.day, b)));
+  m.querySelectorAll('[data-cal-grid] [data-day]').forEach(b => b.addEventListener('click', () => {
+    focusCalDay(+b.dataset.day);
+    if (b.classList.contains('has')) openDay(+b.dataset.day, b);
+  }));
+  m.querySelector('[data-cal-grid]')?.addEventListener('keydown', onCalKey);
+}
+function focusCalDay(day){
+  const grid = document.querySelector('[data-cal-grid]'); if (!grid) return;
+  const cells = [...grid.querySelectorAll('[data-day]')];
+  const el = cells.find(c => +c.dataset.day === day);
+  if (!el) return;
+  cells.forEach(c => { c.tabIndex = -1; c.setAttribute('aria-selected', 'false'); });
+  el.tabIndex = 0; el.setAttribute('aria-selected', 'true'); el.focus();
+  calFocus = { y: calMonth.getFullYear(), m: calMonth.getMonth(), d: day };
+}
+function onCalKey(e){
+  const keys = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown','Enter',' '];
+  if (!keys.includes(e.key)) return;
+  const cell = e.target.closest('[data-day]'); if (!cell) return;
+  const day = +cell.dataset.day;
+  const y = calMonth.getFullYear(), m = calMonth.getMonth(), days = dim(y, m);
+  if (e.key === 'Enter' || e.key === ' ') {
+    if (cell.classList.contains('has')) { e.preventDefault(); openDay(day, cell); }
+    return;
+  }
+  e.preventDefault();
+  if (e.key === 'PageUp' || e.key === 'PageDown') {
+    calMonth = addMonths(calMonth, e.key === 'PageUp' ? -1 : 1);
+    const nd = Math.min(day, dim(calMonth.getFullYear(), calMonth.getMonth()));
+    calFocus = { y: calMonth.getFullYear(), m: calMonth.getMonth(), d: nd };
+    render(); focusCalDay(nd); return;
+  }
+  const weekday = new Date(y, m, day).getDay();
+  let next = day;
+  if (e.key === 'ArrowLeft') next = day - 1;
+  if (e.key === 'ArrowRight') next = day + 1;
+  if (e.key === 'ArrowUp') next = day - 7;
+  if (e.key === 'ArrowDown') next = day + 7;
+  if (e.key === 'Home') next = day - weekday;
+  if (e.key === 'End') next = day + (6 - weekday);
+  if (next < 1) {
+    calMonth = addMonths(calMonth, -1);
+    next = dim(calMonth.getFullYear(), calMonth.getMonth()) + next;
+    calFocus = { y: calMonth.getFullYear(), m: calMonth.getMonth(), d: next };
+    render(); focusCalDay(next); return;
+  }
+  if (next > days) {
+    next = next - days;
+    calMonth = addMonths(calMonth, 1);
+    calFocus = { y: calMonth.getFullYear(), m: calMonth.getMonth(), d: next };
+    render(); focusCalDay(next); return;
+  }
+  focusCalDay(next);
 }
 
 // ---------- Per-account what-if (preview only) ----------
@@ -1027,17 +1105,10 @@ function niceMax(v){ if (v<=0) return 100; const p = Math.pow(10, Math.floor(Mat
 const tick$ = v => v>=1000 ? '$'+(v/1000).toFixed(v%1000?1:0)+'k' : '$'+Math.round(v);
 
 function actualSeries(accts){
-  // reconstruct history: today's balance + payments made after each date
-  const pays = S.payments.filter(p=>accts.some(a=>a.id===p.accountId)).sort((a,b)=>a.date.localeCompare(b.date));
-  const now = accts.reduce((s,a)=>s+a.balance,0);
-  const pts = []; let tot = now + pays.reduce((s,p)=>s+p.amount,0);
-  const created = accts.map(a=>a.created||todayISO()).sort()[0] || todayISO();
-  const t0 = pays.length && pays[0].date < created ? pays[0].date : created;
-  pts.push({ date:new Date(t0+'T12:00'), total:tot });
-  pays.forEach(p => { tot -= p.amount; pts.push({ date:new Date(p.date+'T12:00'), total:Math.max(0,tot) }); });
-  if (!pays.length) return [];
-  pts.push({ date:new Date(), total:now });
-  return pts;
+  const series = ledgerSeries(accts);
+  const dates = [...new Set(series.flatMap(s => s.points.map(p => p.date)))].sort();
+  if (!dates.length) return [];
+  return dates.map(date => ({ date: new Date(date+'T12:00'), total: DebtEngine.balanceAsOf(series, date) }));
 }
 
 function lineChart(accts, id){
@@ -1245,17 +1316,17 @@ function planResultsHTML(){
   <section class="gcard" aria-labelledby="moT"><h2 id="moT" class="g-h">This month</h2>
     ${first ? `<p class="g-sub" style="margin-bottom:8px">Planned out the door: <b>${money2(first.payment)}</b>${first.unapplied > 0.5 ? ` · ${money2(first.unapplied)} of the windfall is more than you owe` : ''}</p>
     <div class="table-scroll"><table class="amort"><caption class="sr-only">Planned payment this month</caption><thead><tr><th scope="col">Debt</th><th scope="col" title="Payment">Pay</th><th scope="col">Interest</th><th scope="col" title="Principal">Principal</th><th scope="col" title="Balance left after the payment">Left</th></tr></thead><tbody>
-    ${first.rows.map(r => `<tr><th scope="row">${esc(r.name)}</th><td data-label="Pay">${money2(r.payment)}</td><td data-label="Interest">${money2(r.interest)}</td><td data-label="Principal" class="${r.principal<0?'neg':''}">${money2(r.principal)}</td><td data-label="Left">${money2(r.balance)}</td></tr>`).join('')}
+    ${first.rows.map(r => `<tr><th scope="row">${esc(r.name)}${r.dueDay ? ` <span class="small">due ${r.due.toLocaleDateString('en-US',{month:'short', day:'numeric'})}</span>` : ''}</th><td data-label="Pay">${money2(r.payment)}</td><td data-label="Interest">${money2(r.interest)}</td><td data-label="Principal" class="${r.principal<0?'neg':''}">${money2(r.principal)}</td><td data-label="Left">${money2(r.balance)}</td></tr>`).join('')}
     </tbody></table></div>` : '<p class="lin-empty">Nothing to pay.</p>'}
   </section>
   <section class="gcard" aria-labelledby="scT"><h2 id="scT" class="g-h">Month-by-month schedule</h2>
     <div class="field"><label for="schedAcct">Show</label><select id="schedAcct"><option value="">All debts</option>${open.map(a => `<option value="${esc(a.id)}" ${planFilter===a.id?'selected':''}>${esc(a.name)}</option>`).join('')}</select></div>
     <div class="table-scroll" id="schedTable" tabindex="0" role="region" aria-label="Amortization schedule"><table class="amort"><caption class="sr-only">${planFilter ? 'Schedule for one debt' : 'Schedule for every debt'}. Interest is charged, then the payment is applied.</caption>
       <thead><tr><th scope="col">Month</th><th scope="col" title="Payment">Pay</th><th scope="col">Interest</th><th scope="col" title="Principal">Principal</th><th scope="col" title="Balance left">Left</th></tr></thead><tbody>
-      ${shown.map(m => { const row = planFilter ? m.rows[0] : null; const payment = row ? row.payment : m.payment; const interest = row ? row.interest : m.interest; const principal = row ? row.principal : m.principal; const balance = row ? row.balance : m.balance; return `<tr><th scope="row">${fmtMonth(m.date)}</th><td data-label="Pay">${money2(payment)}</td><td data-label="Interest">${money2(interest)}</td><td data-label="Principal" class="${principal<0?'neg':''}">${money2(principal)}</td><td data-label="Left">${money2(balance)}</td></tr>`; }).join('')}
+      ${shown.map(m => { const row = planFilter ? m.rows[0] : null; const payment = row ? row.payment : m.payment; const interest = row ? row.interest : m.interest; const principal = row ? row.principal : m.principal; const balance = row ? row.balance : m.balance; const when = row && row.due ? row.due : m.date; return `<tr><th scope="row">${fmtMonth(when)}</th><td data-label="Pay">${money2(payment)}</td><td data-label="Interest">${money2(interest)}</td><td data-label="Principal" class="${principal<0?'neg':''}">${money2(principal)}</td><td data-label="Left">${money2(balance)}</td></tr>`; }).join('')}
       </tbody></table></div>
     ${filtered.length > cap ? `<button type="button" class="btn sm" id="showAllSched" style="margin-top:10px">Show ${Math.min(filtered.length, 240)} months</button>` : filtered.length > 18 ? `<p class="small">Showing ${shown.length} of ${filtered.length} months.</p>` : ''}
-    <p class="small">The model starts this month and doesn’t use the due day. A logged payment still lowers the balance you stored; it does not split interest for you.</p>
+    <p class="small">Each debt is paid on its due day. Debts without a due day are paid on the 1st. Interest is still one month at a time. A logged payment adds the interest since the last balance change, then the payment is applied.</p>
   </section>`;
 }
 function readPlanForm(root){
@@ -1554,7 +1625,7 @@ function openAccountForm(acc, trigger){
     ${field({id:'f_bal',label:'Current balance',value:edit?acc.balance:'',placeholder:'Same as start',attrs:'inputmode="decimal"'})}</div>
     <div class="two-col">${field({id:'f_min',label:'Minimum payment',value:acc?.min??'',placeholder:'$0.00',attrs:'inputmode="decimal"'})}
     ${field({id:'f_apr',label:'Interest rate (APR) — optional',value:acc?.apr||'',placeholder:'e.g. 24.99',help:'Add it for a more accurate payoff date.',attrs:'inputmode="decimal"'})}</div>
-    <div class="field"><label for="f_due">Due day</label><select id="f_due" aria-describedby="f_due-h"><option value="">No due date</option>${Array.from({length:31},(_,i)=>`<option value="${i+1}" ${acc?.dueDay===i+1?'selected':''}>${ordinal(i+1)}</option>`).join('')}</select><div class="help" id="f_due-h">Used to flag what is due soon and to build a reminder.</div></div>
+    <div class="field"><label for="f_due">Due day</label><select id="f_due" aria-describedby="f_due-h"><option value="">No due date</option>${Array.from({length:31},(_,i)=>`<option value="${i+1}" ${acc?.dueDay===i+1?'selected':''}>${ordinal(i+1)}</option>`).join('')}</select><div class="help" id="f_due-h">The payoff schedule puts this debt's payment on this day, and flags it on the calendar.</div></div>
     <div class="form-actions"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn primary">${edit?'Save changes':'Add account'}</button></div>
     ${edit?`<button type="button" class="link-btn" id="delAcct" style="color:var(--red);margin-top:14px">Delete this account</button>`:''}
   </form>`;
@@ -1581,7 +1652,7 @@ function openAccountForm(acc, trigger){
       if (firstBad){ f.querySelector('#'+firstBad).focus(); return; }
       const data = { name, type:f.f_type.value, start:r2(start), balance:r2(bal), min:r2(min), apr: apr ? apr : 0, dueDay: f.f_due.value ? +f.f_due.value : null };
       const first = !S.accounts.length;
-      if (edit){ Object.assign(acc, data); noteChange('editing '+name); }
+      if (edit){ const prevBal = acc.balance; Object.assign(acc, data); recordBalance(acc, prevBal); noteChange('editing '+name); }
       else { S.accounts.push({ id:uid(), tier:null, created:todayISO(), ...data }); noteChange('adding '+name); }
       if (first) S.flags.backupTip = false;
       save(); closeAll(); render(); toast(edit ? 'Changes saved' : 'Account added');
@@ -1603,14 +1674,18 @@ function acardHTML(a, sim){
 }
 function payHistoryHTML(a){
   const ps = S.payments.filter(p => p.accountId === a.id).sort((x,y) => y.date.localeCompare(x.date));
-  return `<h3 class="micro" style="margin:18px 0 8px">Payment history</h3>${ps.length ? `<ul class="list pay-hist">${ps.map(p => `<li><span><b>${money2(p.amount)}</b> <span class="muted">${fmtDay(p.date)}</span></span><button type="button" class="btn sm rm-pay" data-rmpay="${p.id}" aria-label="Remove ${money2(p.amount)} payment on ${fmtDay(p.date)}">Remove</button></li>`).join('')}</ul>` : '<p class="small" style="margin:0">No payments logged yet.</p>'}`;
+  return `<h3 class="micro" style="margin:18px 0 8px">Payment history</h3>${ps.length ? `<ul class="list pay-hist">${ps.map(p => `<li><span><b>${money2(p.amount)}</b> <span class="muted">${fmtDay(p.date)}${p.interest > 0.004 ? ` · ${money2(p.interest)} interest · ${money2(p.principal)} principal` : ''}</span></span><button type="button" class="btn sm rm-pay" data-rmpay="${p.id}" aria-label="Remove ${money2(p.amount)} payment on ${fmtDay(p.date)}">Remove</button></li>`).join('')}</ul>` : '<p class="small" style="margin:0">No payments logged yet.</p>'}`;
 }
 const fmtDay = iso => new Date(iso+'T12:00').toLocaleDateString('en-US',{ month:'short', day:'numeric', year:'numeric' });
 function removePayment(id){
   const i = S.payments.findIndex(p => p.id === id); if (i < 0) return null;
   const p = S.payments[i], acc = S.accounts.find(a => a.id === p.accountId), before = acc ? acc.balance : 0;
   S.payments.splice(i, 1);
-  if (acc) { acc.balance = r2(acc.start > 0 ? Math.min(Math.max(acc.start, before), before + p.amount) : before + p.amount); if (acc.balance > 0.004) acc.celebrated = false; }
+  if (acc) {
+    if (p.legacy === false) acc.balance = r2(Math.max(0, before - (Number(p.interest) || 0) + p.amount));
+    else acc.balance = r2(acc.start > 0 ? Math.min(Math.max(acc.start, before), before + p.amount) : before + p.amount);
+    if (acc.balance > 0.004) acc.celebrated = false;
+  }
   save(); return { p, i, accId: acc?.id, before, wasCelebrated: acc ? before <= 0.004 : false };
 }
 function undoRemove(u){
@@ -1667,30 +1742,73 @@ function openDetail(acc, trigger){
   openDialog({ title:acc.name, body:'', trigger, onMount: draw });
 }
 
+function isoToDate(iso){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date();
+}
+function lastEventISO(acc){
+  const dates = [acc.created, ...S.payments.filter(p => p.accountId === acc.id).map(p => p.date), ...(S.adjustments || []).filter(a => a.accountId === acc.id).map(a => a.date)].filter(Boolean).sort();
+  return dates.length ? dates[dates.length - 1] : todayISO();
+}
+function recordBalance(acc, previous){
+  if (Math.abs(acc.balance - previous) <= 0.004) return;
+  if (!Array.isArray(S.adjustments)) S.adjustments = [];
+  S.adjustments.push({ id: uid(), accountId: acc.id, date: todayISO(), balance: r2(acc.balance), previous: r2(previous) });
+}
+function paymentSplit(acc, amount, date){
+  const fromISO = lastEventISO(acc);
+  const backdated = date < fromISO;
+  const split = DebtEngine.splitPayment(acc.balance, acc.apr || 0, amount, isoToDate(fromISO), isoToDate(date));
+  return { ...split, backdated, fromISO };
+}
 function openLog(acc, trigger){
   const sim = simulate(S.accounts); const plan = r2(sim.firstPay[acc.id] || acc.min);
+  const dueInterest = DebtEngine.splitPayment(acc.balance, acc.apr || 0, 0, isoToDate(lastEventISO(acc)), isoToDate(todayISO())).interest;
+  const payoffAmt = r2(acc.balance + dueInterest);
   const body = `<form novalidate><p class="muted" style="margin-top:0">${esc(acc.name)} · ${money2(acc.balance)} left</p>
     ${field({id:'p_amt',label:'Amount',value:plan.toFixed(2),attrs:'inputmode="decimal"'})}
-    <div class="chips" style="margin:-4px 0 14px"><button type="button" class="chip" data-q="${acc.min}">Minimum</button><button type="button" class="chip" data-q="${plan}">Plan</button><button type="button" class="chip" data-q="${acc.balance}">Pay it off</button></div>
+    <div class="chips" style="margin:-4px 0 14px"><button type="button" class="chip" data-q="${acc.min}">Minimum</button><button type="button" class="chip" data-q="${plan}">Plan</button><button type="button" class="chip" data-q="${payoffAmt}">Pay it off</button></div>
     ${field({id:'p_date',label:'Date',type:'date',value:todayISO()})}
+    <p class="small" id="pSplit" style="margin-top:0"></p>
     <div class="form-actions"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn primary">Save payment</button></div></form>`;
   openDialog({ title:'Log a payment', body, trigger, onMount: sh => {
     const f = sh.querySelector('form');
+    const paint = () => {
+      const el = f.querySelector('#pSplit'); if (!el) return;
+      const amt = num(f.p_amt.value), date = f.p_date.value;
+      if (amt == null || !/^\d{4}-\d{2}-\d{2}$/.test(date)) { el.textContent = ''; return; }
+      const split = paymentSplit(acc, amt, date);
+      el.textContent = split.backdated ? 'This date is before the last balance change, so the full amount comes off the current balance.'
+        : split.interest > 0.004 ? `${money2(split.interest)} is interest since ${fmtDay(split.fromISO)}. ${money2(Math.max(0, split.principal))} lowers the balance.`
+        : 'No interest has built up since the last balance change. The whole payment lowers the balance.';
+    };
     f.querySelector('[data-close]').addEventListener('click', closeTop);
-    f.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', () => { f.p_amt.value = (+b.dataset.q).toFixed(2); f.p_amt.focus(); }));
+    f.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', () => { f.p_amt.value = (+b.dataset.q).toFixed(2); f.p_amt.focus(); paint(); }));
+    f.p_amt.addEventListener('input', paint); f.p_date.addEventListener('input', paint); paint();
     f.addEventListener('submit', e => {
       e.preventDefault();
       const amt = num(f.p_amt.value); const date = f.p_date.value;
-      const ea = (amt===null||isNaN(amt)||amt<=0) ? 'Enter an amount more than $0.' : amt > acc.balance + 0.004 ? `That’s more than the ${money2(acc.balance)} left.` : null;
+      const split = /^\d{4}-\d{2}-\d{2}$/.test(date) && amt != null ? paymentSplit(acc, amt, date) : null;
+      const cap = split ? (split.backdated ? acc.balance : r2(acc.balance + split.interest)) : acc.balance;
+      const ea = (amt===null||isNaN(amt)||amt<=0) ? 'Enter an amount more than $0.' : amt > cap + 0.004 ? `That’s more than the ${money2(cap)} owed, including interest.` : null;
       const ed = !/^\d{4}-\d{2}-\d{2}$/.test(date) ? 'Pick a date.' : null;
       setErr(f,'p_amt',ea); setErr(f,'p_date',ed);
       if (ea){ f.p_amt.focus(); return; } if (ed){ f.p_date.focus(); return; }
-      const prevPlan = plan; acc.balance = r2(Math.max(0, acc.balance - amt));
-      S.payments.push({ id:uid(), accountId:acc.id, amount:r2(amt), date });
+      const prevPlan = plan;
+      if (split.backdated) {
+        acc.balance = r2(Math.max(0, acc.balance - amt));
+        S.payments.push({ id:uid(), accountId:acc.id, amount:r2(amt), date, interest:0, principal:r2(amt), legacy:true });
+      } else {
+        const applied = DebtEngine.splitPayment(acc.balance, acc.apr || 0, amt, isoToDate(split.fromISO), isoToDate(date));
+        acc.balance = applied.balanceAfter;
+        S.payments.push({ id:uid(), accountId:acc.id, amount:r2(amt), date, interest:applied.interest, principal:applied.principal, balanceAfter:applied.balanceAfter, legacy:false });
+      }
       noteChange('logging a payment');
       closeAll(); render();
+      const saved = S.payments[S.payments.length - 1];
       const wait = anubisStrike(amt, acc.balance <= 0.004);
-      if (acc.balance <= 0.004) setTimeout(() => celebrate(acc, prevPlan), wait); else toast(`${money2(amt)} logged`);
+      const note = saved.interest > 0.004 ? `${money2(amt)} logged · ${money2(saved.interest)} interest · ${money2(saved.principal)} principal` : `${money2(amt)} logged`;
+      if (acc.balance <= 0.004) setTimeout(() => celebrate(acc, prevPlan), wait); else toast(note);
     });
   }});
 }
@@ -1706,7 +1824,7 @@ function openCheck(trigger){
       list.forEach(a => { const v = num(f['c_'+a.id].value); const er = (v===null||isNaN(v)||v<0) ? 'Enter $0 or more.' : null; setErr(f,'c_'+a.id,er); if (er && !bad) bad = 'c_'+a.id; });
       if (bad){ f.querySelector('#'+bad).focus(); return; }
       const plans = simulate(S.accounts).firstPay; const zeroed = [];
-      list.forEach(a => { a.balance = r2(num(f['c_'+a.id].value)); if (a.balance > a.start) a.start = a.balance; if (a.balance <= 0.004) zeroed.push(a); });
+      list.forEach(a => { const prev = a.balance; a.balance = r2(num(f['c_'+a.id].value)); if (a.balance > a.start) a.start = a.balance; recordBalance(a, prev); if (a.balance <= 0.004) zeroed.push(a); });
       noteChange('checking balances'); closeAll(); render(); toast('Balances updated'); if (zeroed[0]) celebrate(zeroed[0], plans[zeroed[0].id]); });
   }});
 }
@@ -1746,7 +1864,7 @@ function openSummary(trigger){
 function download(name, text, type){ const b = new Blob([text], { type }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000); }
 function exportJSON(){ download(`debt-slayer-backup-${todayISO()}.json`, JSON.stringify({ app:'debt-slayer', exported:new Date().toISOString(), data:S }, null, 2), 'application/json'); toast('Backup exported'); S.flags.backupTip = true; save(); if (!stack.length) render(); }
 function exportCSV(){
-  const rows = [['date','account','type','amount']].concat(S.payments.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(p => { const a = S.accounts.find(x=>x.id===p.accountId); return [p.date, a?.name||'', a?.type||'', p.amount.toFixed(2)]; }));
+  const rows = [['date','account','type','amount','interest','principal']].concat(S.payments.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(p => { const a = S.accounts.find(x=>x.id===p.accountId); return [p.date, a?.name||'', a?.type||'', p.amount.toFixed(2), (Number(p.interest)||0).toFixed(2), (Number(p.principal)||0).toFixed(2)]; }));
   download(`debt-slayer-payments-${todayISO()}.csv`, rows.map(r=>r.map(c=>/[",\n]/.test(c)?`"${String(c).replace(/"/g,'""')}"`:c).join(',')).join('\n'), 'text/csv'); toast('CSV exported');
 }
 function validBackup(obj){
@@ -1831,4 +1949,5 @@ function openSettings(trigger){
 
 render();
 initSync();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();

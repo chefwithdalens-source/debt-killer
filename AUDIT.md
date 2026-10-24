@@ -60,11 +60,19 @@ Side-by-side snowball, avalanche, and custom plans (payoff date, total interest,
 - Erase can stay on this device (sign out without flushing, then delete the local key) or also push an empty cloud row. The storage note mentions cloud sync when it is configured.
 - Avatars no longer inject initials into inline scripts. A skip link was added. The tab indicator uses the live tab count. Account tiles show APR and minimum.
 
+## Addressed in the follow-up
+
+- A Content-Security-Policy meta tag allows this origin, jsDelivr for supabase-js, and `https://*.supabase.co` / `wss://*.supabase.co` for sync. `script-src` has no `unsafe-inline`. The sidebar Settings button is a real button with a listener. `style-src` still allows inline styles because the page sets layout that way. A meta tag cannot set `frame-ancestors`; GitHub Pages does not offer response headers, so that limit stays.
+- Magic-link sign-in uses PKCE (`flowType: 'pkce'`). The client exchanges `?code=` and keeps the code verifier in its own storage. A link that was already emailed under the old implicit flow (a `#access_token` fragment) will not complete; signing in again sends a new link. An existing session already stored in the browser keeps working.
+- The calendar is a grid: weekday headers and day cells are rows, arrow keys move a roving tabindex, Home and End move within the week, Page Up and Page Down change month, and Enter or Space opens a day that has a payment due.
+- “Due this week” text is `#3E3400` on white, on `#f4f2ee`, and on the chip `#FFF3B0`. Dark mode is `#F6E7A1` on `#121419`, on `#1B1E26`, and on the chip `#3A3418`. Each pair is at least 4.5:1 and locked by `test/a11y.test.js`. The earlier `#5E5E00` on white was already about 6.8:1; the new colors also cover the chip and dark mode, which were the weak pairs. Older `.due-week` rules remain in the file and lose to `.due.due-week`.
+- Balance history walks each account from its starting balance through payments and manual edits. A legacy payment shows the interest that had accrued, then drops by the full payment, which is what that save already did. The series ends on the stored balance, so an old edit that was never written down does not leave a gap. “Check my balances” and editing an account record a balance change. Creating an account does not.
+- Logged payments now store interest and principal. Interest between two dates uses the same monthly charge as the schedule, scaled by days / 30, so 30 days matches one month. The balance becomes balance + interest − payment. Payments saved before this change are marked legacy and annotated in place: interest + principal = the amount, and `account.balance` is not rewritten. Removing a new payment puts the interest back and the principal back. Removing a legacy payment still adds the full amount back, with the old cap. The in-memory version is 3. The storage key is still `debt-killer:v1`. A save is rewritten when it is missing the version, the accelerate-focus flag, numeric interest and principal, or the adjustments list.
+- The schedule places each debt’s payment, and its payoff date, on its due day. No due day means the 1st. Day 31 in a short month clamps to the last day. Interest math and the month count are unchanged. Rows in a month are ordered by due day.
+- `sw.js` precaches the static shell and serves it only when the network fails. A successful load replaces the cached copy. Activating a new worker deletes caches that are not `debt-slayer-shell-v3`. Other origins, including Supabase, are not intercepted. Navigations are stored under `index.html`, so a magic-link `?code=` is not kept as a cache key. Account data stays in localStorage.
+
 ## Still open
 
-- Content-Security-Policy, and magic-link auth moved to PKCE.
-- Calendar grid semantics and keyboard navigation. Raise the contrast of the “due this week” color and collapse the duplicate due-color rules.
-- Balance history that includes interest and manual balance edits. Optionally split a logged payment into interest and principal, with a migration so old balances do not jump.
-- Due-date-aware and biweekly schedules. Pace tiers called out in the comparison so they are not a surprise inside “minimums.”
-- A service worker for the static shell. Delete the unused globe, home-feed, and space-theme paths. Tests for `decideMerge` in `sync.js`.
+- Biweekly schedules. Pace tiers can still raise a floor inside every strategy, including the minimums comparison. The Plan screen says when the accelerate-focus boost is on.
+- Duplicate `.due-week` rules earlier in `styles.css` are unused once `.due.due-week` matches. The globe background, `homeFeedHTML`, and the space theme path are still unused. `decideMerge` in `sync.js` still has no tests.
 - Do not put a service-role key, or any other secret, in this repository.

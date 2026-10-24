@@ -1132,7 +1132,7 @@ body.demo-mode{padding-top:46px}
 .sum-rem li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;min-height:60px;border-top:1px solid var(--hair)}
 .sum-rem li:first-child{border-top:0}
 .sum-days{font-weight:600;font-size:14px;white-space:nowrap}
-.u-overdue,.u-today{color:var(--red)}.u-soon{color:#A33600}.u-week{color:#5E5E00}[data-theme=dark] .u-soon{color:#FF9A5C}[data-theme=dark] .u-week{color:#F5FF2E}.u-later{color:var(--green)}
+.u-overdue,.u-today{color:var(--red)}.u-soon{color:#A33600}.u-week{color:#3E3400}[data-theme=dark] .u-soon{color:#FF9A5C}[data-theme=dark] .u-week{color:#F6E7A1}.u-later{color:var(--green)}
 .sum-bul{margin:0;padding-left:20px;display:grid;gap:8px;font-size:15px}
 .sum-bul li::marker{color:var(--accent-text)}
 .sum-rec{list-style:none;margin:0;padding:0;display:grid;gap:12px;font-size:15px}
@@ -1200,3 +1200,9 @@ body.demo-mode{padding-top:46px}
 @media (min-width:768px){
   .sb-nav{max-height:calc(100vh - 210px);overflow:auto}
 }
+/* Due in 4–7 days. Text is checked against the page and the chip (WCAG AA, 4.5:1). */
+.due.due-week{background:#FFF3B0;color:#3E3400}
+[data-theme=dark] .due.due-week{background:#3A3418;color:#F6E7A1}
+.cal-grid[role=grid]{display:flex;flex-direction:column}
+.cal-grid[role=grid] > [role=row]{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-cell:focus-visible{outline:3px solid var(--accent-btn);outline-offset:2px}

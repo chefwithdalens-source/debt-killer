@@ -4,9 +4,10 @@ A debt payoff planner. Add each debt (balance, APR, minimum, due day). Compare s
 
 ## Your data stays in your browser
 - Every visitor starts with an empty slate.
-- Everything you enter is saved only in your own browser's localStorage (key `debt-killer:v1`) on that device.
-- No accounts, no sign-in, no cookies, no analytics, and no data is sent to any server.
-- Clearing browser data or switching devices means starting over, unless you have a backup.
+- Everything you enter is saved in your own browser's localStorage (key `debt-killer:v1`) on that device.
+- With sync turned off, nothing is sent to a server. There is no analytics.
+- Optional Supabase sync, described below, uploads that same save to a private row while you are signed in.
+- Clearing browser data or switching devices means starting over, unless you have a backup or you are signed in to sync.
 
 ## Backup
 Settings → **Export backup** downloads a dated JSON file. **Import backup** restores it, on this device or another one. You can also export your payments as CSV.
@@ -18,6 +19,10 @@ Payoff math lives in `engine.js` and is covered by `node --test` (or `npm test`)
 
 ## Plan
 The Plan tab stores the strategy on your existing `debt-killer:v1` save. Older saves keep working. If a save predates strategies, “Finish the current target in a set number of payments” stays on so the payment amounts you were shown don’t jump; turn it off for a classic minimum-plus-extra plan. Income, expenses, extra monthly payment, and a one-time windfall are optional fields on that same save.
+
+A due day places that debt’s payment on that day of the month. It does not change the interest or the number of months. Debts with no due day are paid on the 1st. Day 31 clamps to the last day of a short month.
+
+Logging a payment splits it into interest and principal. Interest since the last balance change is balance × APR ÷ 12 × days ÷ 30, rounded to the cent. The stored balance becomes balance + interest − payment. Payments already on disk are marked legacy: the app fills in interest and principal, and leaves the balance where it was. Manual balance edits are kept on the same save and show up in the balance history. The in-memory version is 3. The storage key does not change.
 
 ## Lender logos
 If an account name matches a known lender, its logo shows in place of the initials. Card issuers and buy-now-pay-later providers take priority over networks and stores, so "Navy Federal Amex" shows Navy Federal and "Affirm (Target)" shows Affirm. Logo files are bundled in `/logos` and load from this site only; account names are never sent anywhere.
@@ -31,7 +36,7 @@ Logo credits: Navy Federal, Capital One, Affirm, Mission Lane and Synchrony icon
 
 ## Accounts, calendar and colors
 - **Accounts** are grouped into collapsible category folders, laid out like the iPhone App Library. Each tile shows balance, APR, minimum, and a #1, #2… badge for its place in the current plan. Which folders are open or closed is a display preference saved in `debt-killer:ui`; it isn't account data.
-- **Calendar tab**: a month grid of due dates, colored by category, with an Upcoming list for the next 7 days.
+- **Calendar tab**: a month grid of due dates, colored by category, with an Upcoming list for the next 7 days. Arrow keys move between days. Home and End move within the week. Page Up and Page Down change month. Enter or Space opens a day that has a payment due.
 - **Category colors**: credit cards are blue, buy now pay later is violet, store cards are teal, auto loans are slate, student loans are green, personal loans are pink, medical is rose, and other is grey.
 - **Due-date colors**: Overdue is maroon, Due today is red, 1–3 days is orange, 4–7 days is amber, and later is grey. A due date is **Overdue** when this month's due date has passed with no payment logged in the 30 days before it (or since) and the date is on or after the day the account was added.
 - **Pace**: Aggressive gets an orange-amber tint with a flame icon, Moderate is soft blue, Conservative is soft teal, and Minimum (no pace set) has no tint.
@@ -59,7 +64,11 @@ Home opens with your total debt left, followed by the next target, this month's 
 Open **https://chefwithdalens-source.github.io/debt-killer/?demo=1** (or tap **Try the demo** on the welcome screen). The demo loads clearly fake sample accounts from `demo-data.js`. It is marked DEMO with a banner, lives only in that browser tab (sessionStorage), is never written to localStorage or the cloud, and has **Reset** and **Exit demo** buttons. Your own data on that device is never touched.
 
 ## Cross-device sync (optional, Supabase)
-Debt Slayer works fully offline with no account. If `config.js` has Supabase credentials, **Settings → Sync across devices** (and the welcome screen) offers email magic-link sign-in. While signed in, your data syncs to one private row per user; localStorage stays as the offline cache.
+Debt Slayer works fully offline with no account. A service worker caches the static shell and uses it only when the network fails, so an open connection always loads the current HTML, CSS, and scripts. Supabase and other sites are not cached. Account data stays in localStorage.
+
+If `config.js` has Supabase credentials, **Settings → Sync across devices** (and the welcome screen) offers email magic-link sign-in. The client uses PKCE, so the return URL carries `?code=` and the code verifier stays in the browser. While signed in, your data syncs to one private row per user; localStorage stays as the offline cache.
+
+The page sets a Content-Security-Policy. Scripts load only from this site and from jsDelivr (supabase-js). Connections are limited to this site and `*.supabase.co`. A meta policy cannot set `frame-ancestors`.
 
 - **First sign-in on a device:** if the cloud has data and this device is empty, the cloud copy is loaded. If both have different data, you choose which to keep (the newer one is the default). If only this device has data, it is uploaded.
 - **After that:** changes upload a moment after you make them, and the app checks for newer data when you come back to the tab.
@@ -68,7 +77,7 @@ Debt Slayer works fully offline with no account. If `config.js` has Supabase cre
 ### Setup
 1. Create a Supabase project. In **SQL Editor**, run `supabase/schema.sql`. It creates the `user_state` table with Row Level Security so each user can only read and write their own row.
 2. **Authentication → Sign In / Providers → Email:** enable it. Magic links need no password.
-3. **Authentication → URL Configuration:** set **Site URL** to `https://chefwithdalens-source.github.io/debt-killer/` and add the same URL under **Redirect URLs**.
+3. **Authentication → URL Configuration:** set **Site URL** to `https://chefwithdalens-source.github.io/debt-killer/` and add the same URL under **Redirect URLs**. Magic links return to that URL with `?code=`.
 4. **Project Settings → API:** copy the **Project URL** and the **anon public** key into `config.js`. The anon key is public by design; never put the `service_role` key in this repo.
 5. Optional: under **Authentication → Emails → SMTP**, set up your own email sender. The built-in one is rate-limited to a few emails per hour.
 

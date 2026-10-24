@@ -228,3 +228,116 @@ test('last payment is partial and never exceeds the balance plus interest', () =
   assert.equal(result.schedule[3].balance, 0);
   assert.equal(result.totalPaid, 1000);
 });
+
+test('a due day moves the payoff date and leaves the interest unchanged', () => {
+  const plain = E.project([debt('a', 5000, 18, 150)], { startDate: start });
+  const dated = E.project([debt('a', 5000, 18, 150, { dueDay: 28 })], { startDate: start });
+  assert.equal(plain.freeDate.getDate(), 1);
+  assert.equal(dated.months, plain.months);
+  assert.equal(dated.totalInterest, plain.totalInterest);
+  assert.equal(dated.schedule[0].rows[0].due.getDate(), 28);
+  assert.equal(dated.payoff.a.getDate(), 28);
+  assert.equal(dated.freeDate.getMonth(), plain.freeDate.getMonth());
+  assert.equal(dated.freeDate.getDate(), 28);
+  const feb = E.dueOnDate(new Date(2026, 1, 1), 31);
+  assert.equal(feb.getMonth(), 1);
+  assert.equal(feb.getDate(), 28);
+});
+
+test('the debt-free date is the later due day when two debts finish in one month', () => {
+  const result = E.project([
+    debt('early', 100, 0, 100, { dueDay: 4 }),
+    debt('late', 100, 0, 100, { dueDay: 22 }),
+  ], { startDate: start });
+  assert.equal(result.months, 1);
+  assert.equal(result.freeDate.getDate(), 22);
+  assert.equal(result.schedule[0].rows[0].id, 'early');
+  assert.equal(result.schedule[0].rows[1].id, 'late');
+});
+
+test('thirty days of accrued interest matches one monthly charge', () => {
+  const from = new Date(2026, 0, 1);
+  const to = new Date(2026, 0, 31);
+  assert.equal(cents(E.accruedInterest(1000, 19.99, from, to)), cents(E.monthlyInterest(1000, 19.99)));
+  assert.equal(E.accruedInterest(1000, 19.99, from, from), 0);
+  assert.equal(E.accruedInterest(1000, 0, from, to), 0);
+});
+
+test('a payment split adds interest, then applies the payment', () => {
+  const from = new Date(2026, 0, 1);
+  const to = new Date(2026, 1, 1);
+  const split = E.splitPayment(1000, 18, 200, from, to);
+  const interest = E.accruedInterest(1000, 18, from, to);
+  assert.equal(cents(split.interest), cents(interest));
+  assert.equal(cents(split.principal), cents(200 - interest));
+  assert.equal(cents(split.balanceAfter), cents(1000 + interest - 200));
+  assert.equal(split.unapplied, 0);
+  const cleared = E.splitPayment(100, 0, 100, from, to);
+  assert.equal(cleared.balanceAfter, 0);
+  assert.equal(cleared.interest, 0);
+});
+
+test('annotating old payments does not change the stored balance', () => {
+  const accounts = [{ id: 'a', name: 'Card', start: 1000, balance: 800, apr: 18, created: '2026-01-01' }];
+  const payments = [{ id: 'p1', accountId: 'a', amount: 200, date: '2026-02-01' }];
+  const out = E.annotatePayments(accounts, payments);
+  assert.equal(accounts[0].balance, 800);
+  assert.equal(out[0].legacy, true);
+  assert.equal(cents(out[0].interest + out[0].principal), 20000);
+  assert.ok(out[0].interest > 0);
+  const again = E.annotatePayments(accounts, out);
+  assert.equal(again[0].interest, out[0].interest);
+  const series = E.history(accounts, out, [], new Date(2026, 2, 1));
+  const points = series[0].points;
+  assert.equal(points.some(p => p.kind === 'interest'), true);
+  assert.equal(points[points.length - 1].balance, 800);
+  assert.equal(points.some(p => p.kind === 'reconcile'), false);
+});
+
+test('history keeps a manual balance edit and still ends on today\'s balance', () => {
+  const accounts = [{ id: 'a', name: 'Card', start: 1000, balance: 850, apr: 18, created: '2026-01-01' }];
+  const payments = [{ id: 'p1', accountId: 'a', amount: 200, date: '2026-02-01', interest: 15, principal: 185, legacy: true }];
+  const adjustments = [{ id: 'e1', accountId: 'a', date: '2026-03-01', balance: 850, previous: 800 }];
+  const series = E.history(accounts, payments, adjustments, new Date(2026, 3, 1));
+  assert.equal(E.balanceAsOf(series, '2026-01-15'), 1000);
+  assert.equal(E.balanceAsOf(series, '2026-02-01'), 800);
+  assert.equal(E.balanceAsOf(series, '2026-03-01'), 850);
+  assert.equal(series[0].points[series[0].points.length - 1].balance, 850);
+  const drifted = [{ id: 'a', name: 'Card', start: 1000, balance: 640, apr: 0, created: '2026-01-01' }];
+  const oldPay = [{ id: 'p1', accountId: 'a', amount: 200, date: '2026-02-01' }];
+  const pinned = E.history(drifted, oldPay, [], new Date(2026, 5, 1));
+  assert.equal(pinned[0].points[pinned[0].points.length - 1].balance, 640);
+  assert.equal(pinned[0].points[pinned[0].points.length - 1].kind, 'reconcile');
+});
+
+test('a new payment keeps its split and the balance follows balanceAfter', () => {
+  const from = new Date(2026, 0, 1);
+  const to = new Date(2026, 1, 1);
+  const split = E.splitPayment(1000, 18, 200, from, to);
+  const accounts = [{ id: 'a', name: 'Card', start: 1000, balance: split.balanceAfter, apr: 18, created: '2026-01-01' }];
+  const payments = [{
+    id: 'p1', accountId: 'a', amount: 200, date: '2026-02-01',
+    interest: split.interest, principal: split.principal, balanceAfter: split.balanceAfter, legacy: false,
+  }];
+  const again = E.annotatePayments(accounts, payments);
+  assert.equal(again[0].interest, split.interest);
+  assert.equal(again[0].principal, split.principal);
+  assert.equal(accounts[0].balance, split.balanceAfter);
+  const series = E.history(accounts, payments, [], new Date(2026, 2, 1));
+  const points = series[0].points;
+  assert.equal(points.some(p => p.kind === 'interest' && p.balance > 1000), true);
+  assert.equal(points[points.length - 1].balance, split.balanceAfter);
+  assert.equal(points.some(p => p.kind === 'reconcile'), false);
+  assert.equal(E.balanceAsOf(series, '2026-02-01'), split.balanceAfter);
+});
+
+test('two balance edits on the same day keep the later one', () => {
+  const accounts = [{ id: 'a', name: 'Card', start: 1000, balance: 700, apr: 0, created: '2026-01-01' }];
+  const adjustments = [
+    { id: 'e1', accountId: 'a', date: '2026-02-01', balance: 900, previous: 1000 },
+    { id: 'e2', accountId: 'a', date: '2026-02-01', balance: 700, previous: 900 },
+  ];
+  const series = E.history(accounts, [], adjustments, new Date(2026, 2, 1));
+  assert.equal(E.balanceAsOf(series, '2026-02-01'), 700);
+  assert.equal(series[0].points.some(p => p.kind === 'reconcile'), false);
+});
