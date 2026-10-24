@@ -1,6 +1,6 @@
 # Debt Slayer
 
-A simple debt-snowball planner. Add each debt you owe; Debt Slayer lines them up smallest balance first, tells you what to pay next, projects your debt-free month (including interest when you enter an APR), and tracks your progress with charts.
+A debt payoff planner. Add each debt (balance, APR, minimum, due day). Compare snowball, avalanche, and a custom order side by side, with a month-by-month schedule, extra-payment and one-time windfall what-ifs, and a budget tied to income, expenses, and free cash flow.
 
 ## Your data stays in your browser
 - Every visitor starts with an empty slate.
@@ -14,6 +14,11 @@ Settings → **Export backup** downloads a dated JSON file. **Import backup** re
 ## Run it
 It's static files with no build step. Open `index.html`, or serve the folder with any static host.
 
+Payoff math lives in `engine.js` and is covered by `node --test` (or `npm test`). Interest is monthly: balance × APR ÷ 12, rounded to the cent, then the payment is applied. Snowball sends extra dollars to the smallest balance, avalanche to the highest APR, and a paid-off payment rolls to the next debt.
+
+## Plan
+The Plan tab stores the strategy on your existing `debt-killer:v1` save. Older saves keep working. If a save predates strategies, “Finish the current target in a set number of payments” stays on so the payment amounts you were shown don’t jump; turn it off for a classic minimum-plus-extra plan. Income, expenses, extra monthly payment, and a one-time windfall are optional fields on that same save.
+
 ## Lender logos
 If an account name matches a known lender, its logo shows in place of the initials. Card issuers and buy-now-pay-later providers take priority over networks and stores, so "Navy Federal Amex" shows Navy Federal and "Affirm (Target)" shows Affirm. Logo files are bundled in `/logos` and load from this site only; account names are never sent anywhere.
 
@@ -25,7 +30,7 @@ Logo credits: Navy Federal, Capital One, Affirm, Mission Lane and Synchrony icon
 - The "Killer" wordmark uses Pirata One by Rodrigo Fuenzalida & Nicolas Massi, under the SIL Open Font License (`fonts/OFL-PirataOne.txt`). It's self-hosted and subset to just those letters.
 
 ## Accounts, calendar and colors
-- **Accounts** are grouped into collapsible category folders, laid out like the iPhone App Library. Each tile shows a #1, #2… badge for its place in the snowball order. Which folders are open or closed is a display preference saved in `debt-killer:ui`; it isn't account data.
+- **Accounts** are grouped into collapsible category folders, laid out like the iPhone App Library. Each tile shows balance, APR, minimum, and a #1, #2… badge for its place in the current plan. Which folders are open or closed is a display preference saved in `debt-killer:ui`; it isn't account data.
 - **Calendar tab**: a month grid of due dates, colored by category, with an Upcoming list for the next 7 days.
 - **Category colors**: credit cards are blue, buy now pay later is violet, store cards are teal, auto loans are slate, student loans are green, personal loans are pink, medical is rose, and other is grey.
 - **Due-date colors**: Overdue is maroon, Due today is red, 1–3 days is orange, 4–7 days is amber, and later is grey. A due date is **Overdue** when this month's due date has passed with no payment logged in the 30 days before it (or since) and the date is on or after the day the account was added.
@@ -33,7 +38,7 @@ Logo credits: Navy Federal, Capital One, Affirm, Mission Lane and Synchrony icon
 - **Payoff celebration**: paying an account down to $0 shows a one-time illustrated celebration. With reduced motion turned on, it shows a still image instead.
 
 ## Layout
-There's a floating glass tab bar at the bottom on every screen size (Home, Accounts, Calendar, Progress), and Add account sits in the header. Spacing follows a scale from `--sp-1` to `--sp-8` (4, 8, 12, 16, 24, 32, 48 and 64px).
+There's a floating glass tab bar at the bottom on phones (Home, Accounts, Plan, Calendar, Progress), and a left rail from tablet width up that also includes Summary. Add account sits in the header. Spacing follows a scale from `--sp-1` to `--sp-8` (4, 8, 12, 16, 24, 32, 48 and 64px).
 
 ## Home
 Home opens with your total debt left, followed by the next target, this month's payments, the what-if simulator and the Debt Free / Paid / Next Target summary cards. Every account also has a **What if I pay extra?** preview, and logging a payment plays a quick Anubis strike clip, which you can turn off in Settings.

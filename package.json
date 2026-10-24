@@ -1,0 +1,7 @@
+{
+  "name": "debt-slayer",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}
