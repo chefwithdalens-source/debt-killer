@@ -158,7 +158,8 @@
           p.principal = roundCents((Number(p.amount) || 0) - interest);
           p.legacy = true;
         }
-        if (p.legacy !== false && p.balanceAfter == null) bal = roundCents(Math.max(0, bal - (Number(p.amount) || 0)));
+        if (p.balanceHeld) { /* The screenshot balance already included this payment. */ }
+        else if (p.legacy !== false && p.balanceAfter == null) bal = roundCents(Math.max(0, bal - (Number(p.amount) || 0)));
         else if (typeof p.balanceAfter === 'number') bal = p.balanceAfter;
         else bal = roundCents(Math.max(0, bal + (Number(p.interest) || 0) - (Number(p.amount) || 0)));
         prev = when;
@@ -197,7 +198,8 @@
         }
         const interest = Number(ev.interest) || 0;
         if (interest > 0.004) points.push({ date: ev.date, balance: roundCents(bal + interest), kind: 'interest', interest });
-        if (ev.legacy !== false && ev.balanceAfter == null) bal = roundCents(Math.max(0, bal - (Number(ev.amount) || 0)));
+        if (ev.balanceHeld) { /* The screenshot balance already included this payment. */ }
+        else if (ev.legacy !== false && ev.balanceAfter == null) bal = roundCents(Math.max(0, bal - (Number(ev.amount) || 0)));
         else if (typeof ev.balanceAfter === 'number') bal = ev.balanceAfter;
         else bal = roundCents(Math.max(0, bal + interest - (Number(ev.amount) || 0)));
         points.push({
@@ -574,10 +576,89 @@
     return { basis: 'pace', alreadyFree: false, notOnTrack, monthly: pace.monthly, freeDate: notOnTrack ? null : result.freeDate, result, pace };
   }
 
+  // A local timestamp, so the month key follows the calendar on this device.
+  function captureStamp(date) {
+    const dt = date instanceof Date && !isNaN(date) ? date : new Date();
+    const p = n => String(n).padStart(2, '0');
+    const month = `${dt.getFullYear()}-${p(dt.getMonth() + 1)}`;
+    return { month, capturedAt: `${month}-${p(dt.getDate())}T${p(dt.getHours())}:${p(dt.getMinutes())}:${p(dt.getSeconds())}` };
+  }
+
+  function normalizeSnapshots(list) {
+    if (!Array.isArray(list)) return [];
+    return list.filter(x => x && typeof x.accountId === 'string' && /^\d{4}-\d{2}$/.test(x.month) && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(String(x.capturedAt || '')) && isFinite(+x.balance)).map(x => {
+      const row = {
+        id: typeof x.id === 'string' && x.id ? x.id : 'snap',
+        accountId: x.accountId,
+        month: x.month,
+        capturedAt: String(x.capturedAt),
+        balance: roundCents(Math.max(0, +x.balance)),
+        apr: isFinite(+x.apr) && +x.apr >= 0 ? roundCents(x.apr) : 0,
+        min: isFinite(+x.min) && +x.min >= 0 ? roundCents(x.min) : 0,
+        dueDay: isFinite(+x.dueDay) && +x.dueDay >= 1 && +x.dueDay <= 31 ? Math.round(+x.dueDay) : null,
+      };
+      if (/^\d{4}-\d{2}-\d{2}$/.test(x.dueDate || '')) row.dueDate = x.dueDate;
+      if (x.creditLimit != null && x.creditLimit !== '' && isFinite(+x.creditLimit) && +x.creditLimit >= 0) row.creditLimit = roundCents(x.creditLimit);
+      return row;
+    });
+  }
+
+  // Every reading is kept. A month's row is the latest timestamp for that card.
+  function monthlySeries(snapshots, accountId) {
+    const rows = normalizeSnapshots(snapshots).filter(s => s.accountId === accountId);
+    const ordered = rows.slice().sort((a, b) => a.capturedAt.localeCompare(b.capturedAt) || String(a.id).localeCompare(String(b.id)));
+    const best = new Map();
+    ordered.forEach(s => best.set(s.month, s));
+    const months = [...best.values()].sort((a, b) => a.month.localeCompare(b.month));
+    return months.map((s, i) => {
+      const prev = i ? months[i - 1] : null;
+      return {
+        ...s,
+        balanceChange: prev ? roundCents(s.balance - prev.balance) : null,
+        aprChange: prev ? roundCents(s.apr - prev.apr) : null,
+        minChange: prev ? roundCents(s.min - prev.min) : null,
+      };
+    });
+  }
+
+  function monthLabel(month) {
+    const parts = /^(\d{4})-(\d{2})$/.exec(month || '');
+    if (!parts) return month || '';
+    return new Date(+parts[1], +parts[2] - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }
+
+  // Compare cards that were read in both of the two latest months. A new card
+  // does not look like the older cards grew.
+  function screenshotTrend(snapshots) {
+    const rows = normalizeSnapshots(snapshots);
+    const ordered = rows.slice().sort((a, b) => a.capturedAt.localeCompare(b.capturedAt) || String(a.id).localeCompare(String(b.id)));
+    const best = new Map();
+    ordered.forEach(s => best.set(s.accountId + '|' + s.month, s));
+    const latest = [...best.values()];
+    const months = [...new Set(latest.map(s => s.month))].sort();
+    if (!months.length) return null;
+    if (months.length === 1) return { kind: 'start', month: months[0], since: monthLabel(months[0]) };
+    const prevM = months[months.length - 2];
+    const curM = months[months.length - 1];
+    const prevRows = latest.filter(s => s.month === prevM);
+    const curRows = latest.filter(s => s.month === curM);
+    let delta = 0;
+    let shared = 0;
+    prevRows.forEach(p => {
+      const c = curRows.find(r => r.accountId === p.accountId);
+      if (!c) return;
+      shared += 1;
+      delta = roundCents(delta + (c.balance - p.balance));
+    });
+    if (!shared) return { kind: 'span', from: months[0], to: curM, since: monthLabel(months[0]), until: monthLabel(curM) };
+    return { kind: 'change', delta, shared, from: prevM, to: curM, since: monthLabel(prevM) };
+  }
+
   const api = {
     STRATEGIES, toCents, roundCents, monthlyInterest, sortDebts, plannedFloors, project, minimumsOnly, compare,
     dueOnDate, accruedInterest, splitPayment, annotatePayments, history, balanceAsOf,
     weekContaining, shiftWeek, weeklySnapshot, measurePace, projectMonthly, paceOutlook,
+    captureStamp, normalizeSnapshots, monthlySeries, screenshotTrend, monthLabel,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.DebtEngine = api;

@@ -154,7 +154,8 @@ test('first sign-in uploads local-only data and downloads cloud-only data', asyn
   assert.equal(await a.sync.signedIn({ id: 'user-1', email: 'a@example.com' }), 'push');
   assert.equal(up.row.data.accounts[0].id, 'phone');
   assert.equal(up.row.data._sync.rev, 1);
-  assert.equal(up.row.data.v, 3);
+  assert.equal(up.row.data.v, 4);
+  assert.deepEqual(up.row.data.snapshots, []);
   assert.equal(a.sync.readMeta().baseRev, 1);
   a.sync.suspend();
 
@@ -370,13 +371,15 @@ test('schema migration runs on the way up and on the way down', async () => {
       accounts: d.accounts,
       payments: Engine.annotatePayments(d.accounts, d.payments),
       adjustments: Array.isArray(d.adjustments) ? d.adjustments : [],
+      snapshots: Array.isArray(d.snapshots) ? d.snapshots : [],
       settings: d.settings || {},
     };
   }
   const up = cloudKit();
   const h = harness(up, { state: v1, migrate });
   await h.sync.signedIn({ id: 'user-1' });
-  assert.equal(up.row.data.v, 3);
+  assert.equal(up.row.data.v, 4);
+  assert.deepEqual(up.row.data.snapshots, []);
   assert.equal(Array.isArray(up.row.data.adjustments), true);
   assert.equal(typeof up.row.data.payments[0].interest, 'number');
   assert.equal(up.row.data.payments[0].legacy, true);
@@ -390,7 +393,9 @@ test('schema migration runs on the way up and on the way down', async () => {
     down.row = { data: { ...body, _sync: { rev: 4 } }, updated_at: '2026-04-01T00:00:00.000Z' };
     const g = harness(down, { state: { accounts: [], payments: [] }, migrate });
     assert.equal(await g.sync.signedIn({ id: 'user-1' }), 'pull');
-    assert.equal(g.state.v, 3);
+    assert.equal(g.state.v, 4);
+    assert.ok(Array.isArray(g.state.snapshots));
+    assert.equal(g.state.snapshots.length, 0);
     assert.ok(Array.isArray(g.state.adjustments));
     assert.equal(g.state.payments[0].legacy, true);
     assert.equal(typeof g.state.payments[0].principal, 'number');
@@ -400,8 +405,9 @@ test('schema migration runs on the way up and on the way down', async () => {
   }
 
   const shaped = D.defaultMigrate({ accounts: [{ id: 'a' }], payments: [{ id: 'p' }] });
-  assert.equal(shaped.v, 3);
+  assert.equal(shaped.v, 4);
   assert.deepEqual(shaped.adjustments, []);
+  assert.deepEqual(shaped.snapshots, []);
   assert.equal(typeof shaped.settings, 'object');
 });
 

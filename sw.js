@@ -1,14 +1,16 @@
 // Static shell for GitHub Pages. Network first, so an open connection always gets
 // the current app code. The cache is only the offline fallback. Account data
 // lives in localStorage and is never cached here. Supabase and other origins
-// are left to the network.
-const CACHE = 'debt-slayer-shell-v6';
+// are left to the network. The on-device text engine is not in this install
+// list; the first successful fetch of those files is stored here for later.
+const CACHE = 'debt-slayer-shell-v8';
 const SHELL = [
   './',
   './index.html',
   './styles.css',
   './app.js',
   './engine.js',
+  './ocr.js',
   './sync.js',
   './config.js',
   './demo-data.js',
@@ -68,7 +70,8 @@ self.addEventListener('fetch', event => {
       if (fresh && fresh.ok && key) {
         try {
           const cache = await caches.open(CACHE);
-          await cache.put(key, fresh.clone());
+          // A script tag's request is no-cors. Store a plain URL so that put succeeds.
+          await cache.put(key.url || key, fresh.clone());
         } catch (e) { /* a cache miss must not hide a good network response */ }
       }
       return fresh;
