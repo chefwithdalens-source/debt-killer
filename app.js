@@ -451,6 +451,7 @@ function viewEmpty(){
     <div class="w-actions">
       <button class="w-btn w-primary" data-act="add">Add your first account</button>
       <button class="w-btn w-secondary" id="wImport">Import a backup</button>
+      <button class="w-btn w-secondary" data-act="shot">Update from a screenshot</button>
       <div class="w-alt"><button type="button" class="w-link" id="wDemo">View sample data</button></div>
       <input type="file" id="wImpFile" accept="application/json,.json" hidden aria-label="Backup file">
       <p class="w-note">${storageMsg()}</p>
@@ -587,6 +588,7 @@ function viewHome(){
       <button type="button" data-act="toSnapshot">This week</button>
       <button type="button" data-act="toCalendar">Calendar</button>
       <button type="button" data-act="toAccounts">Accounts</button>
+      <button type="button" data-act="shot">Update from screenshot</button>
     </nav>
     <div>
       <button type="button" class="disclose" data-act="disclose" aria-expanded="false" aria-controls="home-more" id="homeMoreBtn"><span>This month and activity</span><span class="mark" aria-hidden="true"></span></button>
@@ -745,7 +747,7 @@ function viewAccounts(){
   return `<h1 class="large-title">Accounts</h1>
   <div class="summary-row glass"><div><span class="micro">Total owed</span><b>${money2(totals().left)}</b></div><div><span class="micro">Accounts</span><b>${open.length} open${done.length?` · ${done.length} paid`:''}</b></div>
     <div><span class="micro">Next due</span><b>${nd?esc(nd.a.name):'—'}</b>${nd?`<span class="due due-${nd.d.level}" title="${esc(nd.d.full||nd.d.text)}">${dueIcon[nd.d.level]}${esc(nd.d.full||nd.d.text)}</span>`:''}</div></div>
-  <div class="toolbar"><button class="btn sm" data-act="check">Check my balances</button><button class="btn sm" data-act="calAll" aria-label="Add reminders to Google Calendar"><span class="lbl-full">Add reminders to Google Calendar</span><span class="lbl-short">Add to Calendar</span></button></div>
+  <div class="toolbar"><button class="btn sm" data-act="shot">Update from screenshot</button><button class="btn sm" data-act="check">Check my balances</button><button class="btn sm" data-act="calAll" aria-label="Add reminders to Google Calendar"><span class="lbl-full">Add reminders to Google Calendar</span><span class="lbl-short">Add to Calendar</span></button></div>
   <div class="section-head"><h2>${esc(STRAT[S.settings.strategy]?.label || 'Snowball')} order</h2><span class="muted">${open.length?plural(open.length,'account')+' to go':'All done'}</span></div>
   <p class="tip">${icon.info}<span>${S.settings.strategy==='avalanche'?'Highest interest rate goes first, so you pay less interest.':S.settings.strategy==='custom'?'This is the order you set on the Plan tab.':'Smallest balance goes first. Each paid-off debt is a quick win, and its payment rolls into the next one.'} The #1, #2… badges show that order. APR and minimum are on each tile.</span></p>
   ${legendHTML()}
@@ -1449,6 +1451,194 @@ function bindView(){
 function refreshSim(){ const o = $('#simOut'); if (o) o.innerHTML = simText(); document.querySelectorAll('[data-extra]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.extra===simExtra && simExtra>0))); }
 function toggleDisclosure(btn){ return window.DebtDisclose ? DebtDisclose.toggleDisclosure(btn) : false; }
 
+let tesseractLoading = null;
+function loadTesseract(){
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (tesseractLoading) return tesseractLoading;
+  tesseractLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = new URL('vendor/tesseract/tesseract.min.js', document.baseURI).href;
+    s.onload = () => window.Tesseract ? resolve(window.Tesseract) : reject(new Error('Text recognition did not start'));
+    s.onerror = () => reject(new Error('Text recognition could not be loaded'));
+    document.head.appendChild(s);
+  });
+  return tesseractLoading;
+}
+function shotAsset(name){ return new URL('vendor/tesseract/' + name, document.baseURI).href; }
+async function recognizeShots(files, onStatus){
+  const T = await loadTesseract();
+  const worker = await T.createWorker('eng', 1, {
+    workerPath: shotAsset('worker.min.js'),
+    corePath: shotAsset('tesseract-core-simd-lstm.wasm.js'),
+    langPath: shotAsset('').replace(/\/$/, ''),
+    workerBlobURL: false,
+  });
+  const out = [];
+  try {
+    for (let i = 0; i < files.length; i++) {
+      onStatus(`Reading screenshot ${i + 1} of ${files.length} on this device…`);
+      const result = await worker.recognize(files[i]);
+      const data = result && result.data || {};
+      out.push({ text: data.text || '', words: data.words || [], file: files[i] });
+    }
+  } finally { try { await worker.terminate(); } catch {} }
+  return out;
+}
+function shotNow(account, key){
+  if (!account) return 'New account';
+  if (key === 'balance') return 'Now ' + money2(account.balance);
+  if (key === 'minimum') return account.min != null ? 'Now ' + money2(account.min) : 'Not set';
+  if (key === 'creditLimit') return account.creditLimit != null ? 'Now ' + money2(account.creditLimit) : 'Not set';
+  if (key === 'apr') return account.apr ? 'Now ' + account.apr + '%' : 'Not set';
+  if (key === 'dueDay') return account.dueDay ? 'Now day ' + account.dueDay : 'Not set';
+  if (key === 'last4') { const have = window.DebtOcr.accountLast4(account); return have ? 'Now ' + have : 'Not set'; }
+  return '';
+}
+function shotRow(i, key, label, value, current, checked, low, kind){
+  const id = `shot${i}_${key}`;
+  const inputMode = key === 'last4' ? 'numeric' : 'decimal';
+  return `<div class="shot-row${low ? ' is-low' : ''}">
+    <input type="checkbox" id="${id}" data-field="${key}" ${checked ? 'checked' : ''} ${low ? `aria-describedby="${id}f"` : ''}>
+    <div><label for="${id}">${esc(label)}</label>
+      <div class="shot-vals"><input data-val="${key}" inputmode="${inputMode}" value="${esc(value == null ? '' : value)}" aria-label="${esc(label)} from the screenshot">
+        <span class="shot-now" data-now="${key}">${esc(current)}</span></div>
+      ${kind ? `<p class="small shot-kind">${esc(kind)}</p>` : ''}
+      ${low ? `<p class="shot-flag" id="${id}f">Low confidence. Check this before saving.</p>` : ''}
+    </div></div>`;
+}
+function openScreenshot(trigger){
+  if (!window.DebtOcr) { toast('Screenshot reading is not available in this copy.'); return; }
+  let files = [], urls = [], busy = false;
+  const body = `<p class="muted" style="margin-top:0">Drop, paste, or upload a screenshot from your bank. Several at once are fine. The text is read on this device. The image is not uploaded.</p>
+    <div class="shot-drop" id="shotDrop" tabindex="0"><p>Drop screenshots here, or paste one.</p><button type="button" class="btn sm" id="shotPick">Choose images</button>
+      <input type="file" id="shotFile" accept="image/*" multiple hidden aria-label="Bank screenshots"></div>
+    <p class="small" id="shotStatus" role="status" style="min-height:1.2em"></p>
+    <div id="shotReview"></div>
+    <div class="form-actions"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn primary" id="shotSave" disabled>Save updates</button></div>`;
+  openDialog({ title:'Update from screenshot', trigger, body, onMount: sh => {
+    sh.classList.add('sheet-wide');
+    const status = sh.querySelector('#shotStatus');
+    const review = sh.querySelector('#shotReview');
+    const saveBtn = sh.querySelector('#shotSave');
+    const drop = sh.querySelector('#shotDrop');
+    const picker = sh.querySelector('#shotFile');
+    const forget = () => { urls.forEach(u => URL.revokeObjectURL(u)); urls = []; };
+    const onPaste = e => {
+      if (!sh.isConnected) return;
+      const found = [...(e.clipboardData && e.clipboardData.files || [])].filter(f => /^image\//.test(f.type));
+      if (!found.length) return;
+      e.preventDefault(); addFiles(found);
+    };
+    document.addEventListener('paste', onPaste);
+    const watch = new MutationObserver(() => { if (!sh.isConnected) { document.removeEventListener('paste', onPaste); forget(); watch.disconnect(); } });
+    watch.observe(document.body, { childList: true, subtree: true });
+    sh.querySelector('#shotPick').addEventListener('click', () => picker.click());
+    picker.addEventListener('change', () => { if (picker.files && picker.files.length) addFiles(picker.files); picker.value = ''; });
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+    drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('drag'); addFiles(e.dataTransfer.files); });
+    function paint(items){
+      const cards = DebtOcr.prepareReviews(items, S.accounts, { today: todayISO(), payments: S.payments });
+      if (!cards.length) { review.innerHTML = '<p class="muted">No text was found in that image.</p>'; saveBtn.disabled = true; return; }
+      review.innerHTML = cards.map((card, i) => {
+        const acc = card.accountId ? S.accounts.find(a => a.id === card.accountId) : null;
+        const opts = `<option value="__new__" ${card.mode === 'create' ? 'selected' : ''}>Create a new account</option>` + S.accounts.map(a => `<option value="${esc(a.id)}" ${a.id === card.accountId ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
+        const thumbs = (card.sources || []).map(n => urls[n] ? `<img class="shot-thumb" alt="Screenshot ${n + 1}" src="${urls[n]}">` : '').join('');
+        const rows = [];
+        if (card.fields.balance) rows.push(shotRow(i, 'balance', 'Balance', card.fields.balance.value, shotNow(acc, 'balance'), card.fields.balance.checked, card.fields.balance.low, card.fields.balance.label));
+        if (card.fields.apr) rows.push(shotRow(i, 'apr', 'APR', card.fields.apr.value, shotNow(acc, 'apr'), card.fields.apr.checked, card.fields.apr.low, card.fields.apr.label));
+        if (card.fields.minimum) rows.push(shotRow(i, 'minimum', 'Minimum payment', card.fields.minimum.value, shotNow(acc, 'minimum'), card.fields.minimum.checked, card.fields.minimum.low, ''));
+        if (card.fields.dueDay) rows.push(shotRow(i, 'dueDay', 'Due day', card.fields.dueDay.value, shotNow(acc, 'dueDay'), card.fields.dueDay.checked, card.fields.dueDay.low, card.parsed.dueDate ? 'Date on the screenshot: ' + card.parsed.dueDate.value : ''));
+        if (card.fields.creditLimit) rows.push(shotRow(i, 'creditLimit', 'Credit limit', card.fields.creditLimit.value, shotNow(acc, 'creditLimit'), card.fields.creditLimit.checked, card.fields.creditLimit.low, ''));
+        if (card.fields.last4) rows.push(shotRow(i, 'last4', 'Last 4 digits', card.fields.last4.value, shotNow(acc, 'last4'), card.fields.last4.checked, card.fields.last4.low, ''));
+        const pay = card.payment ? `<div class="shot-row${card.payment.low ? ' is-low' : ''}"><input type="checkbox" id="shot${i}_pay" data-field="payment" ${card.payment.checked ? 'checked' : ''} ${card.payment.logged ? 'disabled' : ''}><div>
+          <label for="shot${i}_pay">Log last payment${card.payment.logged ? ' · already logged' : ''}</label>
+          <div class="shot-vals"><input data-val="paymentAmount" inputmode="decimal" value="${esc(card.payment.amount)}" aria-label="Last payment amount" ${card.payment.logged ? 'disabled' : ''}>
+            <input data-val="paymentDate" type="date" value="${esc(card.payment.date)}" aria-label="Last payment date" ${card.payment.logged ? 'disabled' : ''}></div>
+          <p class="small">Saving the balance as well keeps that balance. The payment is recorded and is not subtracted again.</p>
+          ${card.payment.low ? '<p class="shot-flag">Low confidence. Check this before saving.</p>' : ''}
+        </div></div>` : '';
+        return `<section class="shot-card" data-shot data-lender="${esc(card.parsed.lenderId || '')}">${thumbs}<h3 class="micro">${esc(card.suggestedName)}</h3>
+          <div class="field"><label for="shot${i}_acct">Account</label><select id="shot${i}_acct" data-match>${opts}</select></div>
+          <div data-create ${card.mode === 'create' ? '' : 'hidden'}>${field({ id:'shot'+i+'_name', label:'Name', value: card.suggestedName })}${`<div class="field"><label for="shot${i}_type">Type</label><select id="shot${i}_type" data-val="type">${TYPES.map(t => `<option ${t === 'Credit card' ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`}</div>
+          ${rows.join('')}${pay}</section>`;
+      }).join('');
+      review.querySelectorAll('[data-match]').forEach(sel => sel.addEventListener('change', () => {
+        const card = sel.closest('[data-shot]');
+        const acc = sel.value === '__new__' ? null : S.accounts.find(a => a.id === sel.value);
+        card.querySelector('[data-create]').hidden = sel.value !== '__new__';
+        card.querySelectorAll('[data-now]').forEach(el => { el.textContent = shotNow(acc, el.dataset.now); });
+      }));
+      // field() uses id shotN_name but data-val needs to be name. Patch the name input.
+      review.querySelectorAll('[data-create] input').forEach(input => { if (!input.dataset.val) input.dataset.val = 'name'; });
+      saveBtn.disabled = false;
+    }
+    async function addFiles(list){
+      const images = [...list].filter(f => f && /^image\//.test(f.type));
+      if (!images.length) { status.textContent = 'Choose an image of the account screen.'; return; }
+      if (busy) return;
+      files = files.concat(images);
+      forget();
+      urls = files.map(f => URL.createObjectURL(f));
+      busy = true; saveBtn.disabled = true;
+      try {
+        const items = await recognizeShots(files, msg => { status.textContent = msg; });
+        status.textContent = `Found ${items.length} screenshot${items.length === 1 ? '' : 's'}. Check the fields, then save. Nothing is saved until you do.`;
+        paint(items);
+      } catch (err) {
+        status.textContent = (err && err.message) || 'The screenshot could not be read. Your accounts were not changed.';
+        saveBtn.disabled = true;
+      } finally { busy = false; }
+    }
+    saveBtn.addEventListener('click', () => {
+      const chosen = [];
+      let problem = '';
+      review.querySelectorAll('[data-shot]').forEach(card => {
+        const sel = card.querySelector('[data-match]').value;
+        const mode = sel === '__new__' ? 'create' : 'existing';
+        const fields = {};
+        ['balance','apr','minimum','dueDay','creditLimit','last4'].forEach(key => {
+          const box = card.querySelector(`[data-field="${key}"]`);
+          if (!box) return;
+          fields[key] = { on: box.checked, value: card.querySelector(`[data-val="${key}"]`).value };
+        });
+        const payBox = card.querySelector('[data-field="payment"]');
+        let payment = null;
+        if (payBox) payment = { on: payBox.checked && !payBox.disabled, amount: card.querySelector('[data-val="paymentAmount"]').value, date: card.querySelector('[data-val="paymentDate"]').value };
+        const any = Object.values(fields).some(f => f.on) || (payment && payment.on);
+        if (!any) return;
+        if (mode === 'create' && !(fields.balance && fields.balance.on)) { problem = 'A new account needs its balance checked.'; return; }
+        if (mode === 'create' && !card.querySelector('[data-val="name"]').value.trim()) { problem = 'Enter a name for the new account.'; return; }
+        if (fields.balance && fields.balance.on && !(num(fields.balance.value) >= 0)) { problem = 'Enter a balance of $0 or more.'; return; }
+        if (fields.apr && fields.apr.on) { const apr = num(fields.apr.value); if (apr == null || apr < 0 || apr > 100) { problem = 'APR must be between 0 and 100.'; return; } }
+        if (fields.dueDay && fields.dueDay.on) { const day = num(fields.dueDay.value); if (day == null || day < 1 || day > 31) { problem = 'Due day must be from 1 to 31.'; return; } }
+        if (mode === 'existing' && payment && payment.on && !(fields.balance && fields.balance.on)) {
+          const acc = S.accounts.find(a => a.id === sel);
+          const amt = num(payment.amount);
+          if (acc && amt > 0 && /^\d{4}-\d{2}-\d{2}$/.test(payment.date)) {
+            const split = paymentSplit(acc, amt, payment.date);
+            if (split.backdated) { payment.interest = 0; payment.principal = amt; }
+            else { payment.interest = split.interest; payment.principal = split.principal; payment.balanceAfter = split.balanceAfter; }
+          }
+        }
+        chosen.push({
+          mode, accountId: mode === 'existing' ? sel : null,
+          name: mode === 'create' ? card.querySelector('[data-val="name"]').value.trim() : '',
+          type: mode === 'create' ? card.querySelector('[data-val="type"]').value : 'Credit card',
+          lenderId: card.dataset.lender || null,
+          fields, payment,
+        });
+      });
+      if (problem) { status.textContent = problem; return; }
+      if (!chosen.length) { status.textContent = 'Choose at least one field to update. Nothing was saved.'; return; }
+      const result = DebtOcr.applyScreenshotUpdate({ accounts: S.accounts, payments: S.payments, adjustments: S.adjustments || [] }, chosen, { today: todayISO(), id: uid });
+      S.accounts = result.accounts; S.payments = result.payments; S.adjustments = result.adjustments;
+      noteChange('updating accounts from a screenshot');
+      closeAll(); render();
+      toast(chosen.length === 1 ? 'Account updated from the screenshot' : 'Accounts updated from the screenshots');
+    });
+  }});
+}
 function act(a, el){
   const id = el.dataset.id; const acc = S.accounts.find(x=>x.id===id);
   switch(a){
@@ -1473,6 +1663,7 @@ function act(a, el){
     case 'log': return openLog(acc, el);
     case 'detail': return openDetail(acc, el);
     case 'check': return openCheck(el);
+    case 'shot': return openScreenshot(el);
     case 'calAll': return openCalendar(el);
     case 'summary': return openSummary(el);
     case 'extraFor': return openExtraFor(acc, el);
@@ -1609,7 +1800,8 @@ function removePayment(id){
   const p = S.payments[i], acc = S.accounts.find(a => a.id === p.accountId), before = acc ? acc.balance : 0;
   S.payments.splice(i, 1);
   if (acc) {
-    if (p.legacy === false) acc.balance = r2(Math.max(0, before - (Number(p.interest) || 0) + p.amount));
+    if (p.balanceHeld) { /* The screenshot balance already included this payment. */ }
+    else if (p.legacy === false) acc.balance = r2(Math.max(0, before - (Number(p.interest) || 0) + p.amount));
     else acc.balance = r2(acc.start > 0 ? Math.min(Math.max(acc.start, before), before + p.amount) : before + p.amount);
     if (acc.balance > 0.004) acc.celebrated = false;
   }

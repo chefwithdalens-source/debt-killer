@@ -68,7 +68,7 @@ test('a chosen logo overrides the name, and an unknown choice is ignored', () =>
 
 test('every lender file is local and the service worker precaches it', () => {
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.match(sw, /debt-slayer-shell-v6/);
+  assert.match(sw, /debt-slayer-shell-v7/);
   assert.match(sw, /\.\/logos\.js/);
   for (const lender of logos.LENDERS) {
     assert.equal(lender.file.includes('..'), false);

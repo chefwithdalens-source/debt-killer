@@ -78,5 +78,9 @@ Side-by-side snowball, avalanche, and custom plans (payoff date, total interest,
 
 ## Sync safety
 
-`test/sync.test.js` covers `decideMerge` and the sync flow: first sign-in, two devices, a stale tab, erase, sign-out, demo suspension, v1–v3 migration, network retry, and clock skew. A push is compare-and-swap on the revision stored in `data._sync`, not last-write-wins on `updated_at`. Pulling keeps a local backup first. Erasing the cloud writes a tombstone and clears this device only after that write succeeds. The service worker cache is `debt-slayer-shell-v6` so the offline shell picks up `sync.js`. Row Level Security is unchanged; the assumptions are comments in `supabase/schema.sql` and the README.
+`test/sync.test.js` covers `decideMerge` and the sync flow: first sign-in, two devices, a stale tab, erase, sign-out, demo suspension, v1–v3 migration, network retry, and clock skew. A push is compare-and-swap on the revision stored in `data._sync`, not last-write-wins on `updated_at`. Pulling keeps a local backup first. Erasing the cloud writes a tombstone and clears this device only after that write succeeds. The service worker cache is `debt-slayer-shell-v7` so the offline shell picks up `sync.js` and the screenshot parser. Row Level Security is unchanged; the assumptions are comments in `supabase/schema.sql` and the README.
+
+## Update from a screenshot
+
+`ocr.js` parses bank-app text (balance, APR, minimum, due date, credit limit, last payment, last four, lender) and matches it to an account. The review screen is the only way those values are saved. A balance change is an adjustment; a new last payment can be logged, and it does not subtract again when the screenshot balance is saved with it. Tesseract.js 5.1.1, its worker, the LSTM WebAssembly core, and English trained data live under `vendor/tesseract/` (Apache-2.0) and are fetched only when the feature is opened. `script-src` adds `'wasm-unsafe-eval'` so that compile can run. The worker is same-origin (`workerBlobURL: false`); `worker-src 'self'` was already set.
 - Do not put a service-role key, or any other secret, in this repository.

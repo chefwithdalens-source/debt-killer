@@ -158,7 +158,8 @@
           p.principal = roundCents((Number(p.amount) || 0) - interest);
           p.legacy = true;
         }
-        if (p.legacy !== false && p.balanceAfter == null) bal = roundCents(Math.max(0, bal - (Number(p.amount) || 0)));
+        if (p.balanceHeld) { /* The screenshot balance already included this payment. */ }
+        else if (p.legacy !== false && p.balanceAfter == null) bal = roundCents(Math.max(0, bal - (Number(p.amount) || 0)));
         else if (typeof p.balanceAfter === 'number') bal = p.balanceAfter;
         else bal = roundCents(Math.max(0, bal + (Number(p.interest) || 0) - (Number(p.amount) || 0)));
         prev = when;
@@ -197,7 +198,8 @@
         }
         const interest = Number(ev.interest) || 0;
         if (interest > 0.004) points.push({ date: ev.date, balance: roundCents(bal + interest), kind: 'interest', interest });
-        if (ev.legacy !== false && ev.balanceAfter == null) bal = roundCents(Math.max(0, bal - (Number(ev.amount) || 0)));
+        if (ev.balanceHeld) { /* The screenshot balance already included this payment. */ }
+        else if (ev.legacy !== false && ev.balanceAfter == null) bal = roundCents(Math.max(0, bal - (Number(ev.amount) || 0)));
         else if (typeof ev.balanceAfter === 'number') bal = ev.balanceAfter;
         else bal = roundCents(Math.max(0, bal + interest - (Number(ev.amount) || 0)));
         points.push({
