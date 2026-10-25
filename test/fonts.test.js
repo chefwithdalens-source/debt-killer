@@ -17,7 +17,7 @@ test('the app uses the Apple-like stack and self-hosts Inter', () => {
   const ofl = fs.readFileSync(path.join(root, 'fonts', 'OFL-Inter.txt'), 'utf8');
   assert.match(ofl, /SIL Open Font License/);
   assert.match(sw, /fonts\/Inter-Variable-Latin\.woff2/);
-  assert.match(sw, /debt-slayer-shell-v5/);
+  assert.match(sw, /debt-slayer-shell-v6/);
   const blob = css + html + sw;
   assert.doesNotMatch(blob, /fonts\.googleapis\.com|fonts\.gstatic\.com/);
 });

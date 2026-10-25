@@ -70,12 +70,14 @@ If `config.js` has Supabase credentials, **Settings → Sync across devices** (a
 
 The page sets a Content-Security-Policy. Scripts load only from this site and from jsDelivr (supabase-js). Connections are limited to this site and `*.supabase.co`. A meta policy cannot set `frame-ancestors`.
 
-- **First sign-in on a device:** if the cloud has data and this device is empty, the cloud copy is loaded. If both have different data, you choose which to keep (the newer one is the default). If only this device has data, it is uploaded.
-- **After that:** changes upload a moment after you make them, and the app checks for newer data when you come back to the tab.
-- **Sign out:** choose to keep the data on this device or remove it. The cloud copy stays.
+- **First sign-in on a device:** if the cloud has data and this device is empty, the cloud copy is loaded. If both have different data, you choose which to keep. The dialog highlights the copy with the higher revision. The clock is only a hint, so a skewed clock cannot pick a winner by itself. Before a cloud copy replaces this device, the previous local copy is kept in a short backup on the device (`debt-killer:sync-backup`, up to five). If only this device has data, it is uploaded.
+- **After that:** each saved copy carries a revision. A change uploads a moment after you make it, and only when this tab still has the revision it last synced. If this device and the cloud both moved on, the app asks instead of overwriting. A failed upload stays on this device and retries. Coming back to the tab downloads the cloud copy only when its revision is newer and this device has no unsynced edits.
+- **Sign out:** waiting edits are sent first. If that upload fails, you stay signed in and the data stays on this device. You can also remove the on-device copy; the cloud copy stays.
+- **Erase:** “Erase everything” clears this device. While signed in you can also erase the cloud copy. That writes an empty tombstone (a higher revision, not a deleted row) and clears this device only after the write succeeds. A failed cloud erase leaves the on-device accounts in place. An older device cannot recreate erased accounts by uploading over that tombstone.
+- **Row Level Security:** the anon key cannot read or write another user’s row. `supabase/schema.sql` enables RLS, revokes `anon`, and the select, insert, update, and delete policies each require `auth.uid() = user_id`. The client sends only the signed-in user’s id. The service-role key is not in this repo. A tombstone is a normal upsert of that user’s own row. These are the assumptions the client relies on; this repo does not change the Supabase project’s settings.
 
 ### Setup
-1. Create a Supabase project. In **SQL Editor**, run `supabase/schema.sql`. It creates the `user_state` table with Row Level Security so each user can only read and write their own row.
+1. Create a Supabase project. In **SQL Editor**, run `supabase/schema.sql`. It creates the `user_state` table with Row Level Security so each signed-in user can only read and write their own row. Leave those policies as written: `anon` stays revoked, and the client never needs the service-role key.
 2. **Authentication → Sign In / Providers → Email:** enable it. Magic links need no password.
 3. **Authentication → URL Configuration:** set **Site URL** to `https://chefwithdalens-source.github.io/debt-killer/` and add the same URL under **Redirect URLs**. Magic links return to that URL with `?code=`.
 4. **Project Settings → API:** copy the **Project URL** and the **anon public** key into `config.js`. The anon key is public by design; never put the `service_role` key in this repo.
