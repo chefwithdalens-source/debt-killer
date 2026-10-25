@@ -79,7 +79,7 @@
         const { error } = await client.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
         if (error) throw error;
       },
-      async signOut() { try { await this.flush(); } catch {} await client.auth.signOut(); user = null; writeMeta({ uid: null }); status('signedOut'); },
+      async signOut(opts = {}) { if (opts.flush !== false) { try { await this.flush(); } catch {} } await client.auth.signOut(); user = null; writeMeta({ uid: null }); status('signedOut'); },
       start() {
         if (!client) return;
         client.auth.onAuthStateChange((ev, session) => {
