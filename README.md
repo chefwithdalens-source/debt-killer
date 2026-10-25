@@ -22,13 +22,15 @@ The Plan tab stores the strategy on your existing `debt-killer:v1` save. Older s
 
 A due day places that debt’s payment on that day of the month. It does not change the interest or the number of months. Debts with no due day are paid on the 1st. Day 31 clamps to the last day of a short month.
 
-Logging a payment splits it into interest and principal. Interest since the last balance change is balance × APR ÷ 12 × days ÷ 30, rounded to the cent. The stored balance becomes balance + interest − payment. Payments already on disk are marked legacy: the app fills in interest and principal, and leaves the balance where it was. Manual balance edits are kept on the same save and show up in the balance history. The in-memory version is 3. The storage key does not change.
+Logging a payment splits it into interest and principal. Interest since the last balance change is balance × APR ÷ 12 × days ÷ 30, rounded to the cent. The stored balance becomes balance + interest − payment. Payments already on disk are marked legacy: the app fills in interest and principal, and leaves the balance where it was. Manual balance edits are kept on the same save and show up in the balance history. The in-memory version is 4. The storage key does not change. Older saves gain an empty screenshot-reading list the next time they are opened.
 
 ## Update from a screenshot
 
 On Accounts, Home, or the first-run screen, **Update from screenshot** reads a picture of a bank app. Drop, paste, or choose one image or several. The reader is [Tesseract.js](vendor/tesseract/NOTICE.md), stored in this repo (worker, WebAssembly core, and English trained data, Apache-2.0). It loads only when you open the feature, runs entirely in the browser, and the service worker keeps those files after the first successful load. Nothing in the picture is uploaded.
 
 The app shows every number it found next to the current value, with a checkbox and an editable field, and which account it matched (changeable, or a new account). Nothing is saved until **Save updates**. A balance change is a manual balance adjustment. If the screenshot shows a last payment that is not already logged, you can log it; when the balance is saved too, that payment is recorded without subtracting a second time. A read the engine is unsure about is marked and left unchecked.
+
+Each save also stores a monthly reading for that card: balance, APR, minimum, due date, credit limit when the picture included one, and the time it was captured. Several readings in one month are all kept, and the latest is that month’s row. The account’s details (one tap) show the months. This week and Plan add one line when there is something to compare. Sample data never writes these readings into the real save.
 
 ## Lender logos
 If an account name matches a known lender, its logo shows in place of the initials. Card issuers and buy-now-pay-later providers take priority over networks and stores, so "Navy Federal Amex" shows Navy Federal and "Affirm (Target)" shows Affirm. Logo files are bundled in `/logos` and load from this site only; account names are never sent anywhere.

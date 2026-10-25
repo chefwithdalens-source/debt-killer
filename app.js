@@ -76,7 +76,7 @@ function detectType(name){
 }
 
 // ---------- state ----------
-const blank = () => ({ v:3, accounts:[], payments:[], adjustments:[], settings:{ budget:null, defaultMonths:6, theme:'light', followSystem:false, accent:'gold', strike:true, strategy:'snowball', customOrder:[], income:null, expenses:[], useCashFlow:false, accelerateFocus:false, extraMonthly:0, windfall:0 }, flags:{ backupTip:false }, lastFree:null, banner:null });
+const blank = () => ({ v:4, accounts:[], payments:[], adjustments:[], snapshots:[], settings:{ budget:null, defaultMonths:6, theme:'light', followSystem:false, accent:'gold', strike:true, strategy:'snowball', customOrder:[], income:null, expenses:[], useCashFlow:false, accelerateFocus:false, extraMonthly:0, windfall:0 }, flags:{ backupTip:false }, lastFree:null, banner:null });
 function storageMsg(){
   if (DEMO) return 'Demo data lives only in this tab.';
   if (typeof syncConfigured === 'function' && syncConfigured()) return 'Saved on this device, and in your private cloud copy while you are signed in. Export a backup anytime.';
@@ -94,7 +94,7 @@ function load(){
     const n = normalize(d); if (!n) return blank();
     const settings = d.settings || {};
     const payLegacy = (d.payments || []).some(p => !p || typeof p.interest !== 'number' || typeof p.principal !== 'number');
-    const legacy = d.v !== 3 || !Object.prototype.hasOwnProperty.call(settings, 'accelerateFocus') || payLegacy || !Array.isArray(d.adjustments);
+    const legacy = d.v !== 4 || !Object.prototype.hasOwnProperty.call(settings, 'accelerateFocus') || payLegacy || !Array.isArray(d.adjustments) || !Array.isArray(d.snapshots);
     if (legacy) { try { localStorage.setItem(KEY, JSON.stringify(n)); } catch {} }
     return n;
   } catch { return blank(); }
@@ -121,11 +121,13 @@ function normalize(d){
     balance: Math.round(+x.balance * 100) / 100,
     previous: isFinite(+x.previous) ? Math.round(+x.previous * 100) / 100 : null,
   })) : [];
+  const snapshots = DebtEngine.normalizeSnapshots(d.snapshots).map(s => (s.id && s.id !== 'snap' ? s : { ...s, id: uid() }));
   return {
-    v: 3,
+    v: 4,
     accounts: d.accounts,
     payments: DebtEngine.annotatePayments(d.accounts, d.payments),
     adjustments,
+    snapshots,
     settings: {
       budget: numOrNull(s.budget),
       defaultMonths: [4,5,6,7,8].includes(+s.defaultMonths) ? +s.defaultMonths : 6,
@@ -610,6 +612,46 @@ function viewHome(){
     </div>
   </div>`;
 }
+function screenshotTrendLine(cls){
+  const t = window.DebtEngine ? DebtEngine.screenshotTrend(S.snapshots || []) : null;
+  if (!t) return '';
+  let text = '';
+  if (t.kind === 'start') text = `Screenshot readings started in ${t.since}.`;
+  else if (t.kind === 'span') text = `Screenshot readings run from ${t.since} to ${t.until}.`;
+  else {
+    const change = Math.abs(t.delta) < 0.005 ? 'unchanged' : (t.delta < 0 ? 'down ' : 'up ') + money2(Math.abs(t.delta));
+    text = `Screenshot balances are ${change} since ${t.since}.`;
+  }
+  return `<p class="${cls}">${esc(text)}</p>`;
+}
+function monthSpark(rows){
+  const w = 320, h = 52, pad = 6;
+  const vals = rows.map(r => r.balance);
+  const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+  const pts = vals.map((v, i) => {
+    const x = rows.length === 1 ? w / 2 : pad + (i / (rows.length - 1)) * (w - pad * 2);
+    const y = pad + (1 - (v - lo) / span) * (h - pad * 2);
+    return [x, y];
+  });
+  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+  const dots = pts.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="currentColor"/>`).join('');
+  const label = `Balance from screenshots, ${DebtEngine.monthLabel(rows[0].month)} to ${DebtEngine.monthLabel(rows[rows.length - 1].month)}`;
+  return `<svg class="month-spark" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}"><path d="${esc(d)}" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>${dots}</svg>`;
+}
+function monthDelta(n, fmt){
+  if (n == null) return '';
+  if (Math.abs(n) < 0.005) return '<span class="month-delta">No change</span>';
+  return `<span class="month-delta">${n < 0 ? 'Down' : 'Up'} ${esc(fmt(Math.abs(n)))}</span>`;
+}
+function monthSection(a){
+  const rows = DebtEngine.monthlySeries(S.snapshots || [], a.id);
+  if (!rows.length) return '<h3 class="micro" style="margin:18px 0 8px">From screenshots</h3><p class="small" style="margin:0">No screenshot readings for this account yet.</p>';
+  const body = rows.map(r => {
+    const extra = [r.dueDate ? 'Due ' + fmtDay(r.dueDate) : (r.dueDay ? 'Due day ' + r.dueDay : ''), r.creditLimit != null ? 'Limit ' + money2(r.creditLimit) : ''].filter(Boolean).join(' · ');
+    return `<tr><th scope="row">${esc(DebtEngine.monthLabel(r.month))}${extra ? `<span class="month-delta">${esc(extra)}</span>` : ''}</th><td>${money2(r.balance)}${monthDelta(r.balanceChange, money2)}</td><td>${r.apr ? r.apr + '%' : '—'}${monthDelta(r.aprChange, n => n + '%')}</td><td>${money2(r.min)}${monthDelta(r.minChange, money2)}</td></tr>`;
+  }).join('');
+  return `<h3 class="micro" style="margin:18px 0 8px">From screenshots</h3>${monthSpark(rows)}<div class="month-wrap"><table class="month-table"><caption class="sr-only">Balance, APR, and minimum from screenshot readings, by month</caption><thead><tr><th scope="col">Month</th><th scope="col">Balance</th><th scope="col">APR</th><th scope="col">Minimum</th></tr></thead><tbody>${body}</tbody></table></div><p class="small">Each month uses the latest reading. Earlier readings from the same month stay in your save.</p>`;
+}
 let snapWeek = null;
 function fmtWeek(start, end){
   const a = new Date(start + 'T12:00'), b = new Date(end + 'T12:00');
@@ -639,6 +681,7 @@ function viewSnapshot(){
     <div class="snap-nav no-print"><button type="button" data-act="snapPrev">Previous week</button><button type="button" data-act="snapToday">This week</button><button type="button" data-act="snapNext" ${start >= cur ? 'disabled' : ''}>Next week</button><button type="button" data-act="snapPrint">Print or save PDF</button></div></header>
     <section class="snap-hero" aria-label="This week"><div><p>Total debt</p><b>${money2(snap.totals.debt)}</b></div><div><p>Change this week</p><b>${changeTxt}</b></div><div><p>Paid this week</p><b>${money2(snap.totals.paid)}</b></div><div><p>Debt-free at your pace</p><b>${esc(free.title)}</b></div></section>
     ${free.note ? `<p class="snap-pace">${esc(free.note)}</p>` : ''}
+    ${screenshotTrendLine('snap-pace')}
     <section class="snap-detail"><h2>By debt</h2>
       ${rows ? `<table class="snap-table"><thead><tr><th scope="col">Debt</th><th scope="col">Start</th><th scope="col">Paid</th><th scope="col">Interest</th><th scope="col">Principal</th><th scope="col">End</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="snap-foot">No balances in this week.</p>'}
       <p class="snap-foot">${esc(pctTxt)} Interest this week ${money2(snap.totals.interest)}. Principal ${money2(snap.totals.principal)}. The debt-free date is projected from today.</p>
@@ -1312,6 +1355,7 @@ function viewPlan(){
   return `<div class="plan">
   <h1 class="large-title">Plan</h1>
   <p class="subtitle">Snowball, avalanche, or your own order. Interest each month is balance × APR ÷ 12, rounded to the cent, then the payment is applied. Paid-off amounts roll to the next debt.</p>
+  ${screenshotTrendLine('subtitle')}
   <section class="gcard" aria-labelledby="stT">
     <h2 id="stT" class="g-h">Strategy</h2>
     <div class="segmented" role="radiogroup" aria-label="Payoff strategy">${['snowball','avalanche','custom'].map(k => `<button type="button" role="radio" data-strategy="${k}" aria-checked="${s.strategy===k}" tabindex="${s.strategy===k?0:-1}">${STRAT[k].label}</button>`).join('')}</div>
@@ -1558,7 +1602,7 @@ function openScreenshot(trigger){
           <p class="small">Saving the balance as well keeps that balance. The payment is recorded and is not subtracted again.</p>
           ${card.payment.low ? '<p class="shot-flag">Low confidence. Check this before saving.</p>' : ''}
         </div></div>` : '';
-        return `<section class="shot-card" data-shot data-lender="${esc(card.parsed.lenderId || '')}">${thumbs}<h3 class="micro">${esc(card.suggestedName)}</h3>
+        return `<section class="shot-card" data-shot data-lender="${esc(card.parsed.lenderId || '')}" data-due="${esc(card.parsed.dueDate ? card.parsed.dueDate.value : '')}">${thumbs}<h3 class="micro">${esc(card.suggestedName)}</h3>
           <div class="field"><label for="shot${i}_acct">Account</label><select id="shot${i}_acct" data-match>${opts}</select></div>
           <div data-create ${card.mode === 'create' ? '' : 'hidden'}>${field({ id:'shot'+i+'_name', label:'Name', value: card.suggestedName })}${`<div class="field"><label for="shot${i}_type">Type</label><select id="shot${i}_type" data-val="type">${TYPES.map(t => `<option ${t === 'Credit card' ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`}</div>
           ${rows.join('')}${pay}</section>`;
@@ -1626,13 +1670,16 @@ function openScreenshot(trigger){
           name: mode === 'create' ? card.querySelector('[data-val="name"]').value.trim() : '',
           type: mode === 'create' ? card.querySelector('[data-val="type"]').value : 'Credit card',
           lenderId: card.dataset.lender || null,
+          dueDate: fields.dueDay && fields.dueDay.on ? (card.dataset.due || null) : null,
+          creditLimitRead: !!(fields.creditLimit && fields.creditLimit.on),
           fields, payment,
         });
       });
       if (problem) { status.textContent = problem; return; }
       if (!chosen.length) { status.textContent = 'Choose at least one field to update. Nothing was saved.'; return; }
-      const result = DebtOcr.applyScreenshotUpdate({ accounts: S.accounts, payments: S.payments, adjustments: S.adjustments || [] }, chosen, { today: todayISO(), id: uid });
-      S.accounts = result.accounts; S.payments = result.payments; S.adjustments = result.adjustments;
+      const stamp = DebtEngine.captureStamp(new Date());
+      const result = DebtOcr.applyScreenshotUpdate({ accounts: S.accounts, payments: S.payments, adjustments: S.adjustments || [], snapshots: S.snapshots || [] }, chosen, { today: todayISO(), capturedAt: stamp.capturedAt, month: stamp.month, id: uid });
+      S.accounts = result.accounts; S.payments = result.payments; S.adjustments = result.adjustments; S.snapshots = result.snapshots;
       noteChange('updating accounts from a screenshot');
       closeAll(); render();
       toast(chosen.length === 1 ? 'Account updated from the screenshot' : 'Accounts updated from the screenshots');
@@ -1842,6 +1889,7 @@ function openDetail(acc, trigger){
         <div class="stat"><b>${a.dueDay?ordinal(a.dueDay):'—'}</b><span>Due each month</span></div><div class="stat"><b>${a.dueDay?nextDue(a.dueDay).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—'}</b><span>Next due</span> ${dueChip(a)}</div>
         <div class="stat" style="grid-column:1/-1"><b>${a.apr?`${money2(sim.interest[a.id]||0)} at ${a.apr}% APR`:'No interest rate entered'}</b><span>Projected interest</span></div>
       </div>
+      ${monthSection(a)}
       ${payHistoryHTML(a)}
       <h3 class="micro" style="margin:18px 0 8px">Payoff pace</h3>
       <div class="segmented" role="radiogroup" aria-label="Payoff pace">${opts}</div>

@@ -39,10 +39,11 @@
     const src = d && typeof d === 'object' ? d : {};
     const settings = src.settings && typeof src.settings === 'object' && !Array.isArray(src.settings) ? src.settings : {};
     return {
-      v: 3,
+      v: 4,
       accounts: Array.isArray(src.accounts) ? src.accounts : [],
       payments: Array.isArray(src.payments) ? src.payments : [],
       adjustments: Array.isArray(src.adjustments) ? src.adjustments : [],
+      snapshots: Array.isArray(src.snapshots) ? src.snapshots : [],
       settings,
       flags: src.flags && typeof src.flags === 'object' && !Array.isArray(src.flags) ? src.flags : {},
       lastFree: src.lastFree || null,
@@ -161,11 +162,12 @@
       try { out = migrateFn(stripped); } catch { out = null; }
       if (!out || typeof out !== 'object') out = stripped;
       if (!Array.isArray(out.accounts) || !Array.isArray(out.payments)) out = defaultMigrate(out);
-      else if (out.v !== 3 || !Array.isArray(out.adjustments) || !out.settings || typeof out.settings !== 'object' || Array.isArray(out.settings)) {
+      else if (out.v !== 4 || !Array.isArray(out.adjustments) || !Array.isArray(out.snapshots) || !out.settings || typeof out.settings !== 'object' || Array.isArray(out.settings)) {
         const base = defaultMigrate(out);
         out = {
-          ...base, ...stripSync(out), v: 3,
+          ...base, ...stripSync(out), v: 4,
           adjustments: Array.isArray(out.adjustments) ? out.adjustments : base.adjustments,
+          snapshots: Array.isArray(out.snapshots) ? out.snapshots : base.snapshots,
           settings: out.settings && typeof out.settings === 'object' && !Array.isArray(out.settings) ? out.settings : base.settings,
         };
       }
@@ -411,7 +413,7 @@
         if (ticket !== writes || suspended || !user) throw new Error('sync interrupted');
         const cloudRev = row ? revOf(row.data) : 0;
         const next = cloudRev + 1;
-        const body = prepare({ v: 3, accounts: [], payments: [], adjustments: [], settings: {} });
+        const body = prepare({ v: 4, accounts: [], payments: [], adjustments: [], snapshots: [], settings: {} });
         const at = now();
         const payload = { user_id: user.id, data: { ...body, _sync: { rev: next, tombstone: true } }, updated_at: at };
         const { error } = await client.from('user_state').upsert(payload, { onConflict: 'user_id' });

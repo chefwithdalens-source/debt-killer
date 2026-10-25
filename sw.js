@@ -3,7 +3,7 @@
 // lives in localStorage and is never cached here. Supabase and other origins
 // are left to the network. The on-device text engine is not in this install
 // list; the first successful fetch of those files is stored here for later.
-const CACHE = 'debt-slayer-shell-v7';
+const CACHE = 'debt-slayer-shell-v8';
 const SHELL = [
   './',
   './index.html',

@@ -1151,6 +1151,17 @@ body.demo-mode .topbar{top:var(--demo-bar,76px)}
 .snap-who{display:inline-flex;align-items:center;gap:8px;font-weight:650}
 .sheet-head h2{display:flex;align-items:center;gap:8px}
 .ac-top{justify-content:flex-start;gap:10px}
+.month-spark{display:block;width:100%;height:52px;margin:0 0 8px;color:var(--accent)}
+.month-wrap{overflow-x:auto}
+.month-table{width:100%;border-collapse:collapse;font-size:14px}
+.month-table th,.month-table td{padding:8px 6px;border-bottom:1px solid var(--hair);vertical-align:top;text-align:right;font-variant-numeric:tabular-nums}
+.month-table th:first-child,.month-table td:first-child{text-align:left}
+.month-table thead th{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--text3)}
+.month-delta{display:block;margin-top:2px;font-size:12px;font-weight:600;color:var(--text3);font-variant-numeric:tabular-nums}
+@media (max-width:520px){
+  .month-table{font-size:13px}
+  .month-table th,.month-table td{padding:8px 4px}
+}
 
 @media (min-width:700px){
   .sheet.sheet-wide{max-width:680px}

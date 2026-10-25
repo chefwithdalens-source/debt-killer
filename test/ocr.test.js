@@ -261,7 +261,7 @@ test('OCR assets stay on this origin and load only when the feature is opened', 
   assert.match(app, /data-act="shot"/);
   assert.match(app, /vendor\/tesseract\//);
   assert.doesNotMatch(app, /tessdata\.projectnaptha|cdn\.jsdelivr\.net\/npm\/tesseract/);
-  assert.match(sw, /debt-slayer-shell-v7/);
+  assert.match(sw, /debt-slayer-shell-v8/);
   assert.match(sw, /\.\/ocr\.js/);
   assert.doesNotMatch(sw.slice(0, sw.indexOf('self.addEventListener')), /traineddata|tesseract\.min/);
   assert.equal(fs.existsSync(path.join(__dirname, '..', 'vendor/tesseract/eng.traineddata.gz')), true);

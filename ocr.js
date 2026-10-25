@@ -412,11 +412,14 @@
   function applyScreenshotUpdate(state, cards, opts) {
     opts = opts || {};
     const today = opts.today || new Date().toISOString().slice(0, 10);
+    const capturedAt = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(opts.capturedAt || '') ? opts.capturedAt : (today + 'T12:00:00');
+    const month = /^\d{4}-\d{2}$/.test(opts.month || '') ? opts.month : capturedAt.slice(0, 7);
     let n = 0;
     const nextId = () => (typeof opts.id === 'function' ? opts.id() : 'shot-' + (n++));
     const accounts = (state.accounts || []).map(a => ({ ...a }));
     const payments = (state.payments || []).map(p => ({ ...p }));
     const adjustments = (state.adjustments || []).map(a => ({ ...a }));
+    const snapshots = (state.snapshots || []).map(s => ({ ...s }));
     const touched = [];
 
     (cards || []).forEach(card => {
@@ -498,10 +501,20 @@
           payments.push(row);
         }
       }
+      const shot = {
+        id: nextId(), accountId: acc.id, month, capturedAt,
+        balance: r2(Number(acc.balance) || 0),
+        apr: r2(Number(acc.apr) || 0),
+        min: r2(Number(acc.min) || 0),
+        dueDay: acc.dueDay == null ? null : acc.dueDay,
+      };
+      if (/^\d{4}-\d{2}-\d{2}$/.test(card.dueDate || '')) shot.dueDate = card.dueDate;
+      if (card.creditLimitRead && acc.creditLimit != null) shot.creditLimit = r2(acc.creditLimit);
+      snapshots.push(shot);
       touched.push(acc.id);
     });
 
-    return { accounts, payments, adjustments, touched };
+    return { accounts, payments, adjustments, snapshots, touched };
   }
 
   const api = {

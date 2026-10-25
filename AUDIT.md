@@ -78,7 +78,7 @@ Side-by-side snowball, avalanche, and custom plans (payoff date, total interest,
 
 ## Sync safety
 
-`test/sync.test.js` covers `decideMerge` and the sync flow: first sign-in, two devices, a stale tab, erase, sign-out, demo suspension, v1–v3 migration, network retry, and clock skew. A push is compare-and-swap on the revision stored in `data._sync`, not last-write-wins on `updated_at`. Pulling keeps a local backup first. Erasing the cloud writes a tombstone and clears this device only after that write succeeds. The service worker cache is `debt-slayer-shell-v7` so the offline shell picks up `sync.js` and the screenshot parser. Row Level Security is unchanged; the assumptions are comments in `supabase/schema.sql` and the README.
+`test/sync.test.js` covers `decideMerge` and the sync flow: first sign-in, two devices, a stale tab, erase, sign-out, demo suspension, v1–v3 migration, network retry, and clock skew. A push is compare-and-swap on the revision stored in `data._sync`, not last-write-wins on `updated_at`. Pulling keeps a local backup first. Erasing the cloud writes a tombstone and clears this device only after that write succeeds. The service worker cache is `debt-slayer-shell-v8` so the offline shell picks up `sync.js` and the screenshot parser. Saving a screenshot also appends a monthly reading (`snapshots`, save version 4). Older saves migrate to an empty list. The readings travel with the same revision as the rest of the save. Sample data does not write them to localStorage. Row Level Security is unchanged; the assumptions are comments in `supabase/schema.sql` and the README.
 
 ## Update from a screenshot
 
