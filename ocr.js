@@ -101,15 +101,22 @@
   }
 
   function last4OfText(text) {
+    const mask = '[•●∙·*xXeEoO.]';
     const patterns = [
-      /(?:•{2,}|\*{2,}|\.{2,}|x{2,})\s*(\d{4})\b/i,
-      /\(\s*\.{2,}\s*(\d{4})\s*\)/,
-      /\(\s*…\s*(\d{4})\s*\)/,
+      new RegExp('(?:^|[\\s(])(?:' + mask + '{2,})\\s*(\\d{4})\\b', 'i'),
+      new RegExp('\\(\\s*(?:' + mask + '{2,}|…)\\s*(\\d{4})\\s*\\)'),
       /(?:^|\n)\s*[^\n$]{0,80}?-\s*(\d{4})\s*(?:\n|$)/,
     ];
     for (const re of patterns) {
       const m = re.exec(text);
       if (m) return { value: m[1], raw: m[0].trim() };
+    }
+    // A bullet run is often read as a short junk token, such as "eceee 9100".
+    for (const line of String(text).split('\n')) {
+      const t = line.trim();
+      if (!t || t.length > 24 || /[$%\/]/.test(t)) continue;
+      const loose = /^[^0-9]{1,14}\s*(\d{4})$/.exec(t);
+      if (loose) return { value: loose[1], raw: t };
     }
     return null;
   }

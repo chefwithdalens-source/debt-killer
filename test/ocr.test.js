@@ -67,6 +67,13 @@ test('Navy Federal card pages yield balance, APR, minimum, due day, last payment
   const platinum = O.parseStatement(NAVY_PLATINUM, { today: TODAY });
   assert.equal(platinum.product.value, 'Visa Platinum');
   assert.equal(platinum.last4.value, '8303');
+
+  const bullets = O.parseStatement('Visa Signature Flagship Rewards\neeee 9100\nInterest Rate 18.00%', { today: TODAY });
+  assert.equal(bullets.last4.value, '9100');
+  assert.equal(bullets.lender.value, 'Navy Federal');
+  const noisy = O.parseStatement('Visa Signature Flagship Rewards\neceee 9100\nMinimum Payment $241.01 Due 11/17/2026', { today: TODAY });
+  assert.equal(noisy.last4.value, '9100');
+  assert.equal(noisy.dueDate.value, '2026-11-17');
 });
 
 test('Mission Lane detail and home screens merge onto one account', () => {
