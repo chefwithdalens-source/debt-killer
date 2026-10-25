@@ -70,7 +70,8 @@ self.addEventListener('fetch', event => {
       if (fresh && fresh.ok && key) {
         try {
           const cache = await caches.open(CACHE);
-          await cache.put(key, fresh.clone());
+          // A script tag's request is no-cors. Store a plain URL so that put succeeds.
+          await cache.put(key.url || key, fresh.clone());
         } catch (e) { /* a cache miss must not hide a good network response */ }
       }
       return fresh;
