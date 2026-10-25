@@ -27,8 +27,15 @@
     return ct > ls && lu <= ls;   // cloud moved on and we have no unsynced edits
   }
 
+  // Sample data must never land in the real save. Returns false when it refuses.
+  function persistAppState({ demo, storage, key, json }) {
+    if (demo) return false;
+    storage.setItem(key, json);
+    return true;
+  }
+
   function createSync({ client, storage, getState, applyState, ask, onStatus, debounceMs = 1500, now = () => new Date().toISOString() }) {
-    let user = null, timer = null, pushing = null, enabled = !!client;
+    let user = null, timer = null, pushing = null, enabled = !!client, suspended = false;
     const readMeta = () => { try { return JSON.parse(storage.getItem(META)) || {}; } catch { return {}; } };
     const writeMeta = m => { try { storage.setItem(META, JSON.stringify({ ...readMeta(), ...m })); } catch {} };
     const status = (s, extra) => onStatus && onStatus(s, { user, meta: readMeta(), ...extra });
@@ -38,7 +45,7 @@
       if (error) throw error; return data;
     }
     async function push() {
-      if (!user) return;
+      if (suspended || !user) return;
       const at = now(), data = getState();
       const { error } = await client.from('user_state').upsert({ user_id: user.id, data, updated_at: at }, { onConflict: 'user_id' });
       if (error) { status('error', { error }); throw error; }
@@ -63,18 +70,22 @@
       get enabled() { return enabled; }, get user() { return user; }, readMeta,
       // Call after every local change.
       changed() {
+        if (suspended) return;
         writeMeta({ updatedAt: now() });
         if (!user) return;
         clearTimeout(timer); status('pending');
         timer = setTimeout(() => { pushing = push().catch(() => {}); }, debounceMs);
       },
-      async flush() { if (timer) { clearTimeout(timer); timer = null; await push(); } else if (pushing) await pushing; },
+      suspend() { suspended = true; clearTimeout(timer); timer = null; },
+      resume() { suspended = false; },
+      get suspended() { return suspended; },
+      async flush() { if (suspended) return; if (timer) { clearTimeout(timer); timer = null; await push(); } else if (pushing) await pushing; },
       async refresh() {
-        if (!user) return false;
+        if (suspended || !user) return false;
         try { const row = await fetchRow(); if (shouldPull(readMeta(), row)) { pull(row); return true; } } catch (e) { status('error', { error: e }); }
         return false;
       },
-      async signedIn(u) { user = u; return reconcile(); },
+      async signedIn(u) { user = u; if (suspended) return 'suspended'; return reconcile(); },
       async signIn(email, redirectTo) {
         const { error } = await client.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
         if (error) throw error;
@@ -94,6 +105,6 @@
     };
   }
 
-  const api = { decideMerge, shouldPull, createSync, isEmpty, META };
+  const api = { decideMerge, shouldPull, createSync, isEmpty, persistAppState, META };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.DSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);
