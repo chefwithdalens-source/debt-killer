@@ -662,7 +662,7 @@ body.welcome-mode .topbar{display:flex!important;position:fixed;top:0;left:0;rig
 body.welcome-mode .topbar .brand,body.welcome-mode .topbar #headerAdd{display:none!important}
 body.welcome-mode .topbar #settingsBtn,body.welcome-mode .topbar #signInBtn{pointer-events:auto}
 body.welcome-mode .topbar #settingsBtn{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2)}
-body.welcome-mode .topbar #signInBtn{background:#fff;color:#111}
+body.welcome-mode .topbar #signInBtn{position:fixed!important;top:calc(10px + env(safe-area-inset-top))!important;right:calc(64px + env(safe-area-inset-right))!important;z-index:60;background:#fff;color:#111}
 
 /* =================== Cyberpunk palette (same roles, new neon hues) ===================
    magenta #FF2BD6 · cyan #00F0FF · acid lime #B6FF2E · laser orange #FF6A1A · ultraviolet #8A3CFF · hot red #FF1F4B */
@@ -964,8 +964,13 @@ body.welcome-mode .topbar #settingsBtn{position:fixed!important;top:calc(10px + 
 .demo-txt{flex:1;min-width:180px;white-space:normal}
 .demo-btn{border:2px solid #111;background:#fff;color:#111;font:600 14px var(--font);border-radius:999px;padding:6px 14px;min-height:40px;cursor:pointer}
 .demo-btn.primary{background:#111;color:#fff}
-body.demo-mode{padding-top:76px}
-@media (min-width:768px){body.demo-mode .sidebar{top:76px}}
+body.demo-mode{padding-top:var(--demo-bar,76px)}
+body.demo-mode .topbar{top:var(--demo-bar,76px)}
+@media (max-width:520px){
+  .demo-bar{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:8px;font-size:14px;line-height:1.35}
+  .demo-txt{grid-column:1 / -1;min-width:0}
+}
+@media (min-width:768px){body.demo-mode .sidebar{top:var(--demo-bar,76px)}}
 /* welcome extra options + magic link form */
 .w-alt{display:flex;justify-content:center;align-items:center;gap:10px;color:#8E8E93;margin-top:4px}
 .w-link{background:none;border:0;color:#E8C25A;font:600 15px var(--font);padding:10px 6px;min-height:44px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
@@ -1101,7 +1106,7 @@ body.demo-mode{padding-top:76px}
 .snap-hero{display:grid;grid-template-columns:1fr 1fr;gap:18px 24px;padding-bottom:22px;border-bottom:2px solid #141414}
 .snap-hero p{margin:0 0 4px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
 .snap-hero b{display:block;font-size:clamp(26px,4vw,36px);font-weight:650;letter-spacing:-.03em;line-height:1.05}
-.snap-hero span{display:block;margin-top:6px;font-size:14px;font-weight:500;max-width:36em}
+.snap-pace{margin:14px 0 0;font-size:15px;font-weight:500;max-width:40em}
 .snap-detail{margin-top:18px}
 .snap-detail h2{margin:0 0 10px;font-size:15px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
 .snap-table{width:100%;border-collapse:collapse;font-size:14px}
@@ -1128,7 +1133,8 @@ body.demo-mode{padding-top:76px}
   .view{animation:none!important}
   .snap{border:0;border-radius:0;max-width:none;padding:0}
   .snap-hero{grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
-  .snap-hero b{font-size:16px}
+  .snap-hero b{font-size:20px}
+  .snap-pace{font-size:11px;margin-top:8px}
   .snap-table{font-size:10px}
   .snap-table th,.snap-table td{padding:3px 4px}
   .snap-pay{font-size:9px}

@@ -174,16 +174,24 @@ function setDemoURL(on){ try { const u = new URL(location.href); on ? u.searchPa
 function startDemo(){ DEMO = true; if (SYNC) SYNC.suspend(); try { sessionStorage.removeItem(DEMO_KEY); } catch {} S = demoState(); save(); setDemoURL(true); tab = 'home'; closeAll(); render(); toast('Viewing sample data. It stays in this tab.'); }
 function resetDemo(){ try { sessionStorage.removeItem(DEMO_KEY); } catch {} S = demoState(); save(); closeAll(); render(); toast('Sample data reset'); }
 function exitDemo(){ DEMO = false; try { sessionStorage.removeItem(DEMO_KEY); } catch {} setDemoURL(false); S = load(); if (SYNC) SYNC.resume(); tab = 'home'; closeAll(); render(); initSync(); }
+function fitDemoBar(){
+  const b = document.getElementById('demoBar');
+  if (!b) { document.documentElement.style.removeProperty('--demo-bar'); return; }
+  document.documentElement.style.setProperty('--demo-bar', b.offsetHeight + 'px');
+}
+window.addEventListener('resize', fitDemoBar);
 function demoBar(){
   let b = document.getElementById('demoBar');
-  if (!DEMO) { b?.remove(); document.body.classList.remove('demo-mode'); return; }
+  if (!DEMO) { b?.remove(); document.body.classList.remove('demo-mode'); fitDemoBar(); return; }
   document.body.classList.add('demo-mode');
-  if (b) return;
-  b = document.createElement('div'); b.id = 'demoBar'; b.className = 'demo-bar'; b.setAttribute('role','region'); b.setAttribute('aria-label','Viewing sample data');
-  b.innerHTML = `<span class="demo-tag">Sample</span><span class="demo-txt">Viewing sample data. These debts are examples. They are not your accounts and they are not synced.</span><button type="button" class="demo-btn" id="demoReset">Reset</button><button type="button" class="demo-btn primary" id="demoExit">Exit</button>`;
-  document.body.prepend(b);
-  b.querySelector('#demoReset').addEventListener('click', resetDemo);
-  b.querySelector('#demoExit').addEventListener('click', exitDemo);
+  if (!b) {
+    b = document.createElement('div'); b.id = 'demoBar'; b.className = 'demo-bar'; b.setAttribute('role','region'); b.setAttribute('aria-label','Viewing sample data');
+    b.innerHTML = `<span class="demo-tag">Sample</span><span class="demo-txt">Viewing sample data. These debts are examples. They are not your accounts and they are not synced.</span><button type="button" class="demo-btn" id="demoReset">Reset</button><button type="button" class="demo-btn primary" id="demoExit">Exit</button>`;
+    document.body.prepend(b);
+    b.querySelector('#demoReset').addEventListener('click', resetDemo);
+    b.querySelector('#demoExit').addEventListener('click', exitDemo);
+  }
+  fitDemoBar();
 }
 
 // ---------- cross-device sync (Supabase; off unless config.js has credentials) ----------
@@ -630,7 +638,8 @@ function viewSnapshot(){
   }).join('');
   return `<article class="snap"><header class="snap-top"><div><p class="snap-kicker">Weekly snapshot</p><h1>${fmtWeek(snap.start, snap.end)}</h1></div>
     <div class="snap-nav no-print"><button type="button" data-act="snapPrev">Previous week</button><button type="button" data-act="snapToday">This week</button><button type="button" data-act="snapNext" ${start >= cur ? 'disabled' : ''}>Next week</button><button type="button" data-act="snapPrint">Print or save PDF</button></div></header>
-    <section class="snap-hero" aria-label="This week"><div><p>Total debt</p><b>${money2(snap.totals.debt)}</b></div><div><p>Change this week</p><b>${changeTxt}</b></div><div><p>Paid this week</p><b>${money2(snap.totals.paid)}</b></div><div><p>Debt-free at your pace</p><b>${esc(free.title)}</b>${free.note ? `<span>${esc(free.note)}</span>` : ''}</div></section>
+    <section class="snap-hero" aria-label="This week"><div><p>Total debt</p><b>${money2(snap.totals.debt)}</b></div><div><p>Change this week</p><b>${changeTxt}</b></div><div><p>Paid this week</p><b>${money2(snap.totals.paid)}</b></div><div><p>Debt-free at your pace</p><b>${esc(free.title)}</b></div></section>
+    ${free.note ? `<p class="snap-pace">${esc(free.note)}</p>` : ''}
     <section class="snap-detail"><h2>By debt</h2>
       ${rows ? `<table class="snap-table"><thead><tr><th scope="col">Debt</th><th scope="col">Start</th><th scope="col">Paid</th><th scope="col">Interest</th><th scope="col">Principal</th><th scope="col">End</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="snap-foot">No balances in this week.</p>'}
       <p class="snap-foot">${esc(pctTxt)} Interest this week ${money2(snap.totals.interest)}. Principal ${money2(snap.totals.principal)}. The debt-free date is projected from today.</p>
