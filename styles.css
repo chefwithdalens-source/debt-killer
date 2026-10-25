@@ -1139,5 +1139,15 @@ body.demo-mode .topbar{top:var(--demo-bar,76px)}
   .snap-table th,.snap-table td{padding:3px 4px}
   .snap-pay{font-size:9px}
   .snap,.snap *{color:#000}
+  .snap .lender-mark{display:none!important}
   @page{size:portrait;margin:12mm}
 }
+.avatar.lender-mark{border-radius:6px}
+.lender-fallback{position:relative;overflow:visible;background:var(--fill2);color:var(--text);font-weight:700;line-height:1}
+.lender-glyph{position:absolute;width:10px;height:10px;right:-3px;bottom:-3px;background:var(--card-solid);color:var(--text);border-radius:99px;padding:1px;box-shadow:0 0 0 1px var(--hair)}
+.tile-id{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
+.tile-id .name{margin:0;min-width:0;flex:1}
+.calm-name{display:flex;align-items:center;gap:10px}
+.snap-who{display:inline-flex;align-items:center;gap:8px;font-weight:650}
+.sheet-head h2{display:flex;align-items:center;gap:8px}
+.ac-top{justify-content:flex-start;gap:10px}

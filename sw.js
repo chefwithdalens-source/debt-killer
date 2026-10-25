@@ -2,7 +2,7 @@
 // the current app code. The cache is only the offline fallback. Account data
 // lives in localStorage and is never cached here. Supabase and other origins
 // are left to the network.
-const CACHE = 'debt-slayer-shell-v4';
+const CACHE = 'debt-slayer-shell-v5';
 const SHELL = [
   './',
   './index.html',
@@ -22,6 +22,24 @@ const SHELL = [
   './logos/app/logo-192.png',
   './logos/app/favicon-32.png',
   './logos/app/apple-touch-icon.png',
+  './logos.js',
+  './logos/affirm.png',
+  './logos/afterpay.svg',
+  './logos/american-express.svg',
+  './logos/apple-card.svg',
+  './logos/bank-of-america.svg',
+  './logos/best-buy.svg',
+  './logos/capital-one.png',
+  './logos/chase.svg',
+  './logos/citi.svg',
+  './logos/discover.svg',
+  './logos/klarna.svg',
+  './logos/mission-lane.png',
+  './logos/navy-federal.png',
+  './logos/paypal.svg',
+  './logos/synchrony.png',
+  './logos/target.svg',
+  './logos/wells-fargo.svg',
 ];
 
 self.addEventListener('install', event => {

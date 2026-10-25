@@ -39,30 +39,17 @@ const fmtMonth = d => d && d.getDate() > 1 ? d.toLocaleDateString('en-US', { mon
 const fmtMonShort = d => `${MON[d.getMonth()]} ${d.getFullYear()}`;
 const debtFree = d => d ? `Debt free by ${fmtMonth(d)}` : 'Debt free date unknown';
 const ordinal = n => n + (n%100>=11&&n%100<=13 ? 'th' : ({1:'st',2:'nd',3:'rd'}[n%10] || 'th'));
-const LOGOS = [
-  [/navy\s*federal|\bnfcu\b/i,'navy-federal.png','Navy Federal'],
-  [/\baffirm\b/i,'affirm.png','Affirm'],
-  [/\bklarna\b/i,'klarna.svg','Klarna'],
-  [/after\s*pay/i,'afterpay.svg','Afterpay'],
-  [/capital\s*one/i,'capital-one.png','Capital One'],
-  [/mission\s*lane/i,'mission-lane.png','Mission Lane'],
-  [/synchrony/i,'synchrony.png','Synchrony'],
-  [/apple\s*card/i,'apple-card.svg','Apple Card'],
-  [/\bchase\b/i,'chase.svg','Chase'],
-  [/\bciti(bank)?\b/i,'citi.svg','Citi'],
-  [/\bdiscover\b/i,'discover.svg','Discover'],
-  [/wells\s*fargo/i,'wells-fargo.svg','Wells Fargo'],
-  [/bank\s*of\s*america|\bbofa\b/i,'bank-of-america.svg','Bank of America'],
-  [/best\s*buy/i,'best-buy.svg','Best Buy'],
-  [/\btarget\b/i,'target.svg','Target'],
-  [/\bamex\b|american\s*express/i,'american-express.svg','American Express'],
-];
-const logoFor = name => { for (const [re,f] of LOGOS) if (re.test(name||'')) return f; return null; };
 function avatar(a, size=44, font=15){
-  const f = logoFor(a.name);
-  if (f) return `<span class="avatar logo-tile" style="width:${size}px;height:${size}px"><img src="logos/${f}" alt="" width="${Math.round(size*.7)}" height="${Math.round(size*.7)}" loading="lazy" data-ini="${esc(initials(a.name))}" data-bg="${TYPE_HEX[a.type]}"></span>`;
-  return `<span class="avatar" style="width:${size}px;height:${size}px;font-size:${font}px;background:${TYPE_HEX[a.type]}">${esc(initials(a.name))}</span>`;
+  const px = Math.round(size);
+  const mark = window.DebtLogos ? DebtLogos.resolveMark(a || {}) : { kind: 'monogram', letter: firstLetter(a && a.name), glyph: null };
+  const letter = esc(mark.letter || firstLetter(a && a.name));
+  if (mark.kind === 'logo') {
+    return `<span class="avatar logo-tile lender-mark" style="width:${px}px;height:${px}px"><img src="logos/${mark.file}" alt="" width="${Math.round(px * 0.72)}" height="${Math.round(px * 0.72)}" data-ini="${letter}" data-bg="${TYPE_HEX[a && a.type] || ''}"></span>`;
+  }
+  const glyph = mark.glyph && window.DebtLogos ? DebtLogos.glyphSVG(mark.glyph) : '';
+  return `<span class="avatar lender-mark lender-fallback" style="width:${px}px;height:${px}px;font-size:${font || Math.max(11, Math.round(px * 0.46))}px" aria-hidden="true"><span class="lender-letter">${letter}</span>${glyph}</span>`;
 }
+const firstLetter = n => (window.DebtLogos ? DebtLogos.firstLetter(n) : (String(n || '').trim().match(/[A-Za-z0-9]/) || ['?'])[0].toUpperCase());
 document.addEventListener('error', e => {
   const img = e.target;
   if (!img || img.tagName !== 'IMG' || !img.dataset || !img.dataset.ini || !img.parentNode) return;
@@ -71,7 +58,6 @@ document.addEventListener('error', e => {
   parent.style.background = img.dataset.bg || 'var(--fill2)';
   parent.textContent = img.dataset.ini;
 }, true);
-const initials = n => n.trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase() || '?';
 const monthsBetween = (a, b) => (b.getFullYear()-a.getFullYear())*12 + b.getMonth()-a.getMonth();
 
 function detectType(name){
@@ -583,7 +569,7 @@ function viewHome(){
     ${homeBanners()}
     <section aria-label="Total debt"><p class="calm-kicker">Total debt</p><p class="calm-amt">${money2(t.left)}</p></section>
     <section aria-label="Next payment"><p class="calm-kicker">Next payment</p>
-      ${next ? `<p class="calm-name">${esc(next.name)}</p><p class="calm-sub">${money2(planN)} · ${dueTxt}</p><div class="calm-actions"><button type="button" class="btn primary" data-act="log" data-id="${next.id}">Log payment</button></div>` : `<p class="calm-name">Nothing due</p><p class="calm-sub">${open.length ? 'Add a due date on the account.' : 'Every account is paid off.'}</p>`}
+      ${next ? `<p class="calm-name">${avatar(next, 24, 12)}<span>${esc(next.name)}</span></p><p class="calm-sub">${money2(planN)} · ${dueTxt}</p><div class="calm-actions"><button type="button" class="btn primary" data-act="log" data-id="${next.id}">Log payment</button></div>` : `<p class="calm-name">Nothing due</p><p class="calm-sub">${open.length ? 'Add a due date on the account.' : 'Every account is paid off.'}</p>`}
     </section>
     <section aria-label="Debt-free date"><p class="calm-kicker">Debt-free</p><p class="calm-date">${esc(free.title)}</p>${free.note ? `<p class="calm-note">${esc(free.note)}</p>` : ''}</section>
     <nav class="calm-links" aria-label="More">
@@ -634,7 +620,8 @@ function viewSnapshot(){
   const rows = snap.rows.map(r => {
     const flags = [r.addedThisWeek ? 'Added' : '', r.paidOff ? 'Paid off' : ''].filter(Boolean).join(' · ');
     const pays = r.payments.map(p => `<div class="snap-pay">${fmtDay(p.date)} · ${money2(p.amount)} · ${money2(p.interest)} interest · ${money2(p.principal)} principal${p.legacy ? ' · Legacy' : ''}</div>`).join('');
-    return `<tr><th scope="row">${esc(r.name)}${flags ? `<span class="snap-flag">${flags}</span>` : ''}${pays}</th><td data-label="Start">${money2(r.start)}</td><td data-label="Paid">${money2(r.paid)}</td><td data-label="Interest">${money2(r.interest)}</td><td data-label="Principal">${money2(r.principal)}</td><td data-label="End">${money2(r.end)}</td></tr>`;
+    const acct = S.accounts.find(a => a.id === r.id) || { name: r.name, type: 'Other' };
+    return `<tr><th scope="row"><span class="snap-who">${avatar(acct, 22, 11)}<span>${esc(r.name)}</span></span>${flags ? `<span class="snap-flag">${flags}</span>` : ''}${pays}</th><td data-label="Start">${money2(r.start)}</td><td data-label="Paid">${money2(r.paid)}</td><td data-label="Interest">${money2(r.interest)}</td><td data-label="Principal">${money2(r.principal)}</td><td data-label="End">${money2(r.end)}</td></tr>`;
   }).join('');
   return `<article class="snap"><header class="snap-top"><div><p class="snap-kicker">Weekly snapshot</p><h1>${fmtWeek(snap.start, snap.end)}</h1></div>
     <div class="snap-nav no-print"><button type="button" data-act="snapPrev">Previous week</button><button type="button" data-act="snapToday">This week</button><button type="button" data-act="snapNext" ${start >= cur ? 'disabled' : ''}>Next week</button><button type="button" data-act="snapPrint">Print or save PDF</button></div></header>
@@ -708,8 +695,7 @@ function tile(a, rank, sim){
   const d = dueInfo(a);
   const label = `${a.name}. ${done?'Paid off':money2(a.balance)+' left'}. ${done?'':(STRAT[S.settings.strategy]?.label || 'Plan')+' number '+rank+'. '}${done?'':(a.apr?a.apr+'% APR. ':'No APR. ')+'Minimum '+money2(a.min)+'. '}${paceLabel(a)}. ${d?(d.full||d.text):'No due date'}.`;
   return `<button class="acct tile glass ${a.tier&&!done?'t-'+a.tier:''} ${done?'t-done':''}" data-act="detail" data-id="${a.id}" aria-label="${esc(label)}">
-    <div class="tile-top">${avatar(a,36,13)}<span style="flex:1"></span>${miniRing(pct, done?'var(--green-bar)':CAT[a.type].strong)}${done?'<span class="rank rank-done" aria-hidden="true">✓</span>':`<span class="rank" aria-hidden="true">#${rank}</span>`}</div>
-    <div class="name">${esc(a.name)}</div>
+    <div class="tile-top"><span class="tile-id">${avatar(a,22,12)}<span class="name">${esc(a.name)}</span></span>${miniRing(pct, done?'var(--green-bar)':CAT[a.type].strong)}${done?'<span class="rank rank-done" aria-hidden="true">✓</span>':`<span class="rank" aria-hidden="true">#${rank}</span>`}</div>
     <div class="tile-bal">${done?money(a.start):money2(a.balance)}</div>
     <div class="tile-facts">${done ? 'Paid off' : `${a.apr ? a.apr + '% APR' : 'No APR'} · min ${money2(a.min)}`}</div>
     <div class="tile-meta">${paceTag(a)}${dueChip(a)}</div>
@@ -1540,11 +1526,18 @@ function setErr(form, name, msg){
 }
 const num = v => { const s = String(v).replace(/[$,\s]/g,''); return s === '' ? null : (isFinite(+s) ? +s : NaN); };
 
+function logoField(acc){
+  const cur = (window.DebtLogos && DebtLogos.sanitizeLogo(acc && acc.logo)) || 'auto';
+  const lenders = window.DebtLogos ? DebtLogos.LENDERS : [];
+  const opts = [['auto', 'Match the name'], ['none', 'Letter badge'], ...lenders.map(l => [l.id, l.label])];
+  return `<div class="field"><label for="f_logo">Logo</label><select id="f_logo">${opts.map(([id, label]) => `<option value="${esc(id)}" ${cur === id ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select><p class="help">Shown beside the name. Leave it on “Match the name,” or pick a lender.</p></div>`;
+}
 function openAccountForm(acc, trigger){
   const edit = !!acc;
   const body = `<form novalidate id="acctForm">
     ${field({id:'f_name',label:'Name',value:acc?.name||'',placeholder:'Affirm, Best Buy, Platinum One',attrs:'autocomplete="off"'})}
     <div class="field"><label for="f_type">Type</label><select id="f_type" aria-describedby="f_type-h">${TYPES.map(t=>`<option ${acc?.type===t?'selected':''}>${t}</option>`).join('')}</select><div class="help" id="f_type-h" ${edit?'hidden':''}>Picked automatically from the name.</div></div>
+    ${logoField(acc)}
     <div class="two-col">${field({id:'f_start',label:'Starting balance',value:acc?.start??'',placeholder:'$0.00',attrs:'inputmode="decimal"'})}
     ${field({id:'f_bal',label:'Current balance',value:edit?acc.balance:'',placeholder:'Same as start',attrs:'inputmode="decimal"'})}</div>
     <div class="two-col">${field({id:'f_min',label:'Minimum payment',value:acc?.min??'',placeholder:'$0.00',attrs:'inputmode="decimal"'})}
@@ -1575,9 +1568,10 @@ function openAccountForm(acc, trigger){
       const firstBad = ['f_name','f_start','f_bal','f_min','f_apr'].find(k => errs[k]);
       if (firstBad){ f.querySelector('#'+firstBad).focus(); return; }
       const data = { name, type:f.f_type.value, start:r2(start), balance:r2(bal), min:r2(min), apr: apr ? apr : 0, dueDay: f.f_due.value ? +f.f_due.value : null };
+      const chosen = window.DebtLogos ? DebtLogos.sanitizeLogo(f.f_logo.value) : null;
       const first = !S.accounts.length;
-      if (edit){ const prevBal = acc.balance; Object.assign(acc, data); recordBalance(acc, prevBal); noteChange('editing '+name); }
-      else { S.accounts.push({ id:uid(), tier:null, created:todayISO(), ...data }); noteChange('adding '+name); }
+      if (edit){ const prevBal = acc.balance; Object.assign(acc, data); if (chosen) acc.logo = chosen; else delete acc.logo; recordBalance(acc, prevBal); noteChange('editing '+name); }
+      else { const row = { id:uid(), tier:null, created:todayISO(), ...data }; if (chosen) row.logo = chosen; S.accounts.push(row); noteChange('adding '+name); }
       if (first) S.flags.backupTip = false;
       save(); closeAll(); render(); toast(edit ? 'Changes saved' : 'Account added');
     });
@@ -1588,7 +1582,7 @@ function acardHTML(a){
   const due = a.dueDay ? nextDue(a.dueDay) : null;
   const dueTxt = a.balance <= 0.004 ? 'Paid off' : !due ? 'No due date' : due.toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
   return `<section class="acard" aria-label="${esc(a.name)} summary">
-    <div class="ac-top"><b class="ac-name">${esc(a.name)}</b>${avatar(a,34,12)}</div>
+    <div class="ac-top">${avatar(a, 24, 12)}<b class="ac-name">${esc(a.name)}</b></div>
     <p class="ac-big">${money2(a.balance)}</p><p class="ac-sub">${a.balance <= 0.004 ? 'paid off' : 'left to pay'}</p>
     <p class="ac-min"><span class="calm-kicker">Minimum</span><br><b>${money2(a.min)}</b></p>
     <p class="ac-min"><span class="calm-kicker">Next due</span><br><b>${dueTxt}</b></p>
@@ -1654,7 +1648,7 @@ function openDetail(acc, trigger){
       <div class="actions">${a.balance>0.004?'<button class="btn primary block" id="dLog">Log a payment</button>':''}<button class="btn block" id="dEdit">Edit account</button>${a.balance>0.004?'<button class="btn block" id="dExtra">What if I pay extra?</button>':''}
       ${a.dueDay?`<a class="btn block" href="${calUrl(a)}" target="_blank" rel="noopener">Add monthly reminder to Google Calendar</a>`:'<p class="small" style="margin:0;text-align:center">Set a due day to add a calendar reminder.</p>'}
       <button class="btn block" data-close2>Close</button></div></div>`;
-    sh.querySelector('h2').textContent = a.name;
+    sh.querySelector('h2').innerHTML = `${avatar(a, 22, 12)}<span>${esc(a.name)}</span>`;
     sh.querySelectorAll('[data-tier]').forEach(b => b.addEventListener('click', () => { const k = b.dataset.tier; a.tier = a.tier===k?null:k; noteChange('changing the pace on '+a.name); render(); draw(sh); sh.querySelector(`[data-tier="${k}"]`).focus(); }));
     sh.querySelector('#clearTier')?.addEventListener('click', () => { a.tier = null; noteChange('changing the pace on '+a.name); render(); draw(sh); });
     sh.querySelector('#dLog')?.addEventListener('click', e => openLog(a, e.currentTarget));
