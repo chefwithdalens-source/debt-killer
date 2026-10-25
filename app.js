@@ -189,6 +189,7 @@ function initSync(){
   if (SYNC || DEMO || !syncConfigured() || !window.DSync) return;
   const boot = client => {
     SYNC = DSync.createSync({ client, storage: localStorage, getState: () => S,
+      migrate: d => normalize(d) || d,
       applyState: d => { if (DEMO) return; S = normalize(d) || blank(); if (!(window.DSync && DSync.persistAppState({ demo: false, storage: localStorage, key: KEY, json: JSON.stringify(S) }))) { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} } render(); },
       ask: askMerge, onStatus: (st) => { syncStatus = st; document.querySelectorAll('[data-sync-status]').forEach(el => el.textContent = syncStatusText()); updateSignIn(); } });
     window.__DS_SYNC = SYNC; SYNC.start();
@@ -202,15 +203,18 @@ function initSync(){
 }
 function syncStatusText(){
   const m = SYNC ? SYNC.readMeta() : {};
-  return { off:'Not signed in', signedOut:'Not signed in', syncing:'Syncing…', pending:'Changes waiting to sync…', error:'Couldn’t reach the sync server. Your data is safe on this device.',
+  return { off:'Not signed in', signedOut:'Not signed in', syncing:'Syncing…', pending:'Changes waiting to sync…',
+    retry:'Couldn’t reach the sync server. Retrying… Your data is safe on this device.',
+    conflict:'This device and the cloud copy both changed. Nothing was overwritten.',
+    error:'Couldn’t reach the sync server. Your data is safe on this device.',
     synced: m.lastSynced ? `Synced ${new Date(m.lastSynced).toLocaleString('en-US',{ month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}` : 'Synced' }[syncStatus] || '';
 }
 function askMerge({ prefer, localAt, cloudAt }){
   return new Promise(resolve => {
     const when = t => t ? new Date(t).toLocaleString('en-US',{ month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) : 'unknown';
     let done = false; const fin = v => { if (done) return; done = true; resolve(v); closeTop(); };
-    const btn = (k, label, t) => `<button type="button" class="btn ${prefer===k?'primary':''} block" data-pick="${k}" style="margin-bottom:10px">${label}<br><span class="small">Last changed ${when(t)}${prefer===k?' · newer':''}</span></button>`;
-    openDialog({ title:'Which data should we keep?', body:`<p class="muted" style="margin-top:0">This device and your cloud copy are different. Pick one; the other is replaced.</p>
+    const btn = (k, label, t) => `<button type="button" class="btn ${prefer===k?'primary':''} block" data-pick="${k}" style="margin-bottom:10px">${label}<br><span class="small">Last changed ${when(t)}${prefer===k?' · suggested':''}</span></button>`;
+    openDialog({ title:'Which data should we keep?', body:`<p class="muted" style="margin-top:0">This device and your cloud copy both changed. Pick one. The other is replaced. A copy of what is on this device is kept first.</p>
       ${prefer==='cloud' ? btn('cloud','Keep the cloud copy',cloudAt) + btn('local','Keep this device’s copy',localAt) : btn('local','Keep this device’s copy',localAt) + btn('cloud','Keep the cloud copy',cloudAt)}`,
       onMount: sh => {
         sh.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => fin(b.dataset.pick)));
@@ -255,13 +259,19 @@ function bindMagic(root){
 function bindSyncSection(sh, rerender){
   bindMagic(sh);
   sh.querySelector('#syncExitDemo')?.addEventListener('click', exitDemo);
-  sh.querySelector('#syncNow')?.addEventListener('click', async () => { try { await SYNC.flush(); const pulled = await SYNC.refresh(); if (!pulled) { SYNC.changed(); await SYNC.flush(); } toast('Synced'); } catch { toast('Couldn’t sync right now'); } });
+  sh.querySelector('#syncNow')?.addEventListener('click', async () => { try { await SYNC.flush(); await SYNC.reconcile(); toast('Synced'); } catch { toast('Couldn’t sync right now. Your data is still on this device.'); } });
   sh.querySelector('#syncOut')?.addEventListener('click', e => {
     openDialog({ title:'Sign out', trigger:e.currentTarget, body:`<p class="muted" style="margin-top:0">Your cloud copy stays safe. What should happen to the data on this device?</p>
       <button type="button" class="btn block" id="outKeep" style="margin-bottom:10px">Keep it on this device</button><button type="button" class="btn block" id="outClear" style="color:var(--red)">Remove it from this device</button>`,
       onMount: d => {
-        d.querySelector('#outKeep').addEventListener('click', async () => { await SYNC.signOut(); closeAll(); render(); toast('Signed out. Data kept on this device.'); });
-        d.querySelector('#outClear').addEventListener('click', async () => { await SYNC.signOut(); localStorage.removeItem(KEY); localStorage.removeItem(DSync.META); S = blank(); tab = 'home'; closeAll(); render(); toast('Signed out and removed from this device'); });
+        d.querySelector('#outKeep').addEventListener('click', async () => {
+          try { await SYNC.signOut(); } catch { toast('Couldn’t sync the latest changes, so you’re still signed in. Your data is still on this device.'); return; }
+          closeAll(); render(); toast('Signed out. Data kept on this device.');
+        });
+        d.querySelector('#outClear').addEventListener('click', async () => {
+          try { await SYNC.signOut(); } catch { toast('Couldn’t sync the latest changes, so you’re still signed in. Nothing was removed.'); return; }
+          localStorage.removeItem(KEY); localStorage.removeItem(DSync.META); S = blank(); tab = 'home'; closeAll(); render(); toast('Signed out and removed from this device');
+        });
       } });
   });
 }
@@ -1856,13 +1866,17 @@ function openSettings(trigger){
         if (DEMO) { exitDemo(); return; }
         const both = !!document.getElementById('eraseCloud')?.checked;
         let cloudCleared = false;
-        if (SYNC && SYNC.user && both) { S = blank(); save(); try { await SYNC.flush(); cloudCleared = true; } catch {} }
-        else if (SYNC && SYNC.user) { try { await SYNC.signOut({ flush: false }); } catch {} localStorage.removeItem(KEY); }
-        else localStorage.removeItem(KEY);
+        if (SYNC && SYNC.user && both) {
+          try { await SYNC.clearCloud(); cloudCleared = true; } catch { cloudCleared = false; }
+          if (!cloudCleared) { closeTop(); toast('Couldn’t erase the cloud copy. Your accounts are still on this device.'); return; }
+          localStorage.removeItem(KEY); S = blank();
+        } else if (SYNC && SYNC.user) {
+          try { await SYNC.signOut({ flush: false }); } catch {}
+          localStorage.removeItem(KEY); S = blank();
+        } else { localStorage.removeItem(KEY); S = blank(); }
         localStorage.removeItem(UIKEY); UI = {open:{}, expanded:{}};
-        if (!(both && cloudCleared)) S = blank();
         simExtra = 0; whatIfAmt = 100; planShowAll = false; planFilter = ''; tab = 'home'; closeAll(); render();
-        toast(both ? (cloudCleared ? 'Erased on this device and in the cloud' : 'Erased on this device. The cloud copy may still be there.') : 'Erased on this device');
+        toast(both ? 'Erased on this device and in the cloud' : 'Erased on this device. The cloud copy was left as it is.');
       } }));
   }});
   // revert unsaved theme preview if closed without saving

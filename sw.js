@@ -2,7 +2,7 @@
 // the current app code. The cache is only the offline fallback. Account data
 // lives in localStorage and is never cached here. Supabase and other origins
 // are left to the network.
-const CACHE = 'debt-slayer-shell-v5';
+const CACHE = 'debt-slayer-shell-v6';
 const SHELL = [
   './',
   './index.html',
