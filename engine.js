@@ -394,9 +394,190 @@
     return { strategies, minimumsOnly: minimums };
   }
 
+  function asDate(value) {
+    if (value instanceof Date && !isNaN(value)) return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+    return parseISODate(value);
+  }
+
+  function addDays(date, n) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate() + n);
+  }
+
+  // Sunday through Saturday, matching the calendar.
+  function weekContaining(value) {
+    const d = asDate(value) || new Date();
+    const start = addDays(d, -d.getDay());
+    const end = addDays(start, 6);
+    return { start: isoDate(start), end: isoDate(end) };
+  }
+
+  function shiftWeek(weekStartISO, deltaWeeks) {
+    const start = parseISODate(weekStartISO) || new Date();
+    return weekContaining(addDays(start, (Number(deltaWeeks) || 0) * 7));
+  }
+
+  function pointBalance(series, iso) {
+    let bal = 0;
+    let seen = false;
+    ((series && series.points) || []).forEach(p => {
+      if (String(p.date) <= String(iso)) { bal = p.balance; seen = true; }
+    });
+    return seen ? bal : 0;
+  }
+
+  // One Sunday–Saturday week. Start balance is the day before the week, so a
+  // payment on the first day is not already baked into the start number.
+  // End balance stops at today when the week is still in progress.
+  function weeklySnapshot(accounts, payments, adjustments, weekStartISO, today) {
+    const week = weekContaining(weekStartISO);
+    const todayD = asDate(today) || new Date();
+    const todayISO = isoDate(todayD);
+    const asOfEnd = week.end < todayISO ? week.end : todayISO;
+    const dayBefore = isoDate(addDays(parseISODate(week.start), -1));
+    const ann = annotatePayments(accounts, payments);
+    const series = history(accounts, payments, adjustments, todayD);
+    const byId = new Map(series.map(s => [s.id, s]));
+    const rows = [];
+    (accounts || []).forEach(a => {
+      if (!a) return;
+      const mine = byId.get(a.id);
+      const openedOn = a.created || (mine && mine.points[0] && mine.points[0].date) || todayISO;
+      if (openedOn > asOfEnd) return;
+      const addedThisWeek = openedOn >= week.start && openedOn <= week.end && openedOn <= todayISO;
+      const start = openedOn <= dayBefore ? pointBalance(mine, dayBefore) : 0;
+      const end = pointBalance(mine, asOfEnd);
+      const pays = ann.filter(p => p.accountId === a.id && p.date >= week.start && p.date <= week.end && p.date <= todayISO);
+      const paid = roundCents(pays.reduce((n, p) => n + (Number(p.amount) || 0), 0));
+      const interest = roundCents(pays.reduce((n, p) => n + (Number(p.interest) || 0), 0));
+      const principal = roundCents(pays.reduce((n, p) => n + (Number(p.principal) || 0), 0));
+      const paidOff = end <= 0.004 && (start > 0.004 || paid > 0.004);
+      if (start <= 0.004 && end <= 0.004 && paid <= 0.004 && !addedThisWeek) return;
+      rows.push({
+        id: a.id, name: a.name || '', opened: roundCents(Math.max(0, Number(a.start) || 0)),
+        start, end, paid, interest, principal, addedThisWeek, paidOff,
+        payments: pays.map(p => ({
+          id: p.id || '', date: p.date, amount: roundCents(Number(p.amount) || 0),
+          interest: roundCents(Number(p.interest) || 0), principal: roundCents(Number(p.principal) || 0),
+          legacy: p.legacy === true,
+        })),
+      });
+    });
+    const sum = key => roundCents(rows.reduce((n, r) => n + (Number(r[key]) || 0), 0));
+    const original = roundCents(rows.reduce((n, r) => n + (Number(r.opened) || 0), 0));
+    const debt = sum('end');
+    return {
+      start: week.start, end: week.end, asOf: asOfEnd, today: todayISO, rows,
+      totals: {
+        debt, startDebt: sum('start'), change: roundCents(debt - sum('start')),
+        paid: sum('paid'), interest: sum('interest'), principal: sum('principal'),
+        original, percentPaid: original > 0.004 ? (original - debt) / original : 0,
+      },
+    };
+  }
+
+  // Average monthly payments over a recent window (12 weeks by default).
+  // A 30-day month matches the engine. Too short a window, or no payments, is not a pace.
+  function measurePace(payments, opts) {
+    opts = opts || {};
+    const today = asDate(opts.today) || new Date();
+    const todayISO = isoDate(today);
+    const weeks = opts.weeks > 0 ? opts.weeks : 12;
+    const minDays = opts.minDays > 0 ? opts.minDays : 28;
+    let start = addDays(today, -(weeks * 7 - 1));
+    const since = asDate(opts.since);
+    if (since && since > start) start = since;
+    const startISO = isoDate(start);
+    const days = daysBetween(start, today) + 1;
+    const pays = (payments || []).filter(p => p && String(p.date) >= startISO && String(p.date) <= todayISO);
+    const paid = roundCents(pays.reduce((n, p) => n + (Number(p.amount) || 0), 0));
+    const enough = days >= minDays && pays.length > 0 && paid > 0.004;
+    return {
+      enough, paid, days, count: pays.length, start: startISO, end: todayISO,
+      monthly: enough ? roundCents(paid * 30 / days) : 0,
+    };
+  }
+
+  function scaledFloors(open, pace) {
+    const floors = {};
+    const weights = open.map(d => Math.max(0, Number(d.min) || 0));
+    const sum = weights.reduce((n, w) => n + w, 0);
+    if (!(sum > 0)) {
+      open.forEach(d => { floors[d.id] = 0; });
+      return floors;
+    }
+    let assigned = 0;
+    open.forEach((d, i) => {
+      if (i === open.length - 1) floors[d.id] = roundCents(Math.max(0, pace - assigned));
+      else {
+        const share = roundCents(pace * weights[i] / sum);
+        floors[d.id] = share;
+        assigned = roundCents(assigned + share);
+      }
+    });
+    return floors;
+  }
+
+  // Run `monthly` dollars through the cent-rounded schedule.
+  // At or above the minimums, the extra rolls by strategy. Below the minimums,
+  // the floors are scaled to the pace, because a budget under the floors is ignored.
+  function projectMonthly(debts, monthly, opts) {
+    opts = opts || {};
+    const open = (debts || []).filter(d => d && (Number(d.balance) || 0) > 0.004);
+    const pace = Math.max(0, Number(monthly) || 0);
+    const sumMin = roundCents(open.reduce((n, d) => n + Math.max(0, Number(d.min) || 0), 0));
+    const floors = {};
+    let budget = null;
+    if (pace + 0.004 >= sumMin) {
+      open.forEach(d => { floors[d.id] = Math.max(0, Number(d.min) || 0); });
+      budget = pace;
+    } else {
+      Object.assign(floors, scaledFloors(open, pace));
+    }
+    return project(open, {
+      strategy: opts.strategy || 'snowball',
+      customOrder: opts.customOrder,
+      paymentFloors: floors,
+      budget,
+      extraMonthly: 0,
+      windfall: 0,
+      startDate: opts.startDate || asDate(opts.today) || new Date(),
+      round: opts.round,
+      maxMonths: opts.maxMonths,
+    });
+  }
+
+  function paceOutlook(debts, payments, opts) {
+    opts = opts || {};
+    const open = (debts || []).filter(d => d && (Number(d.balance) || 0) > 0.004);
+    if (!open.length) {
+      return { basis: 'free', alreadyFree: true, notOnTrack: false, monthly: 0, freeDate: null, result: null, pace: null };
+    }
+    const pace = measurePace(payments, opts);
+    if (!pace.enough) {
+      const floors = opts.paymentFloors || plannedFloors(open, opts);
+      const result = project(open, {
+        strategy: opts.strategy || 'snowball',
+        customOrder: opts.customOrder,
+        paymentFloors: floors,
+        budget: opts.budget,
+        extraMonthly: opts.extraMonthly,
+        windfall: opts.windfall,
+        startDate: opts.startDate || asDate(opts.today) || new Date(),
+        round: opts.round,
+        maxMonths: opts.maxMonths,
+      });
+      const notOnTrack = !!(result.stuck || !result.freeDate);
+      return { basis: 'plan', alreadyFree: false, notOnTrack, monthly: result.monthlyCommitment, freeDate: notOnTrack ? null : result.freeDate, result, pace };
+    }
+    const result = projectMonthly(open, pace.monthly, opts);
+    const notOnTrack = !!(result.stuck || !result.freeDate);
+    return { basis: 'pace', alreadyFree: false, notOnTrack, monthly: pace.monthly, freeDate: notOnTrack ? null : result.freeDate, result, pace };
+  }
+
   const api = {
     STRATEGIES, toCents, roundCents, monthlyInterest, sortDebts, plannedFloors, project, minimumsOnly, compare,
     dueOnDate, accruedInterest, splitPayment, annotatePayments, history, balanceAsOf,
+    weekContaining, shiftWeek, weeklySnapshot, measurePace, projectMonthly, paceOutlook,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.DebtEngine = api;

@@ -61,6 +61,6 @@ test('the service worker caches the shell for offline use and keeps data off the
   assert.match(sw, /url\.search/);
   assert.match(sw, /caches\.delete/);
   assert.match(sw, /await fetch\(request\)/);
-  assert.match(sw, /debt-slayer-shell-v3/);
+  assert.match(sw, /debt-slayer-shell-v4/);
   assert.doesNotMatch(sw, /localStorage\./);
 });
